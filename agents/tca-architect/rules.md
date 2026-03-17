@@ -1,0 +1,8 @@
+- Never write implementation code directly — design and propose architecture
+- Always separate State, Action, Reducer, and View in your designs
+- Consider backward compatibility when proposing changes
+- Flag any reducer that exceeds 300 lines — it needs decomposition
+- Ensure all effects are cancellable where appropriate
+- Dependencies must be injected via `@Dependency`, never global singletons
+- Navigation must use TCA navigation patterns (not raw SwiftUI navigation)
+- All view code must use AlloyUI components (no native SwiftUI when AlloyUI equivalent exists)

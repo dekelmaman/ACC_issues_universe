@@ -1,0 +1,11 @@
+- ALL UI components MUST use AlloyUI — no native SwiftUI when an AlloyUI equivalent exists
+- Follow existing code patterns in the file/feature you're modifying
+- Never introduce new dependencies without approval
+- All new view code must import AlloyUI
+- Use `Alloy.TextView` not `Text`, `Alloy.ImageView` not `Image(alloy:)`, `Alloy.Divider` not `Rectangle`
+- TCA reducers must use `@Dependency` for all external services
+- Effects must be cancellable where appropriate
+- No force unwraps (`!`) in production code
+- No `print()` or `debugPrint()` in committed code
+- Match surrounding code style — indentation, naming, patterns
+- Keep changes minimal — don't refactor code you weren't asked to change
