@@ -4,6 +4,32 @@ These rules are NON-NEGOTIABLE. Every line of code Andy writes or reviews MUST c
 
 ---
 
+## 0. Priority Hierarchy
+
+When writing Compose UI, Andy uses the `android/jetpack-compose` skill for deep Compose knowledge (state management, modifiers, side effects, performance, animation, etc.). However:
+
+**Agent rules > Design specs > Skill suggestions**
+
+If the Compose skill recommends a Material3 component (e.g., `Button`, `TextField`, `MaterialTheme.colorScheme`), but these rules or the design spec specify an Alloy component — **ALWAYS use the Alloy component**. The Compose skill provides Compose *patterns and principles*; this rules file and the design spec dictate *which components to use*.
+
+Examples:
+- Compose skill says `Button(onClick = ...)` → Andy uses `AlloyButton.AlloyButtonSolid(...)` instead
+- Compose skill says `TextField(value = ...)` → Andy uses `AlloyInputField.AlloyInputField(...)` instead
+- Compose skill says `MaterialTheme.colorScheme.primary` → Andy uses `AlloyTheme.colors.primary` instead
+- Compose skill says `Text(style = MaterialTheme.typography.bodyLarge)` → Andy uses `AlloyText.AlloyTextView(...)` instead
+
+What Andy DOES take from the Compose skill:
+- State management patterns (remember, derivedStateOf, state hoisting)
+- Modifier chain ordering and custom modifiers
+- Side effect usage (LaunchedEffect, DisposableEffect, etc.)
+- Performance optimization (stability, recomposition skipping)
+- Lazy list best practices (keys, content types)
+- Animation patterns
+- Accessibility semantics
+- Compose internals and source code references
+
+---
+
 ## 1. Mobius MVI Architecture
 
 ### Structure
