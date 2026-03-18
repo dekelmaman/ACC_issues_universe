@@ -201,6 +201,9 @@ Prioritize test creation by:
 - **Mock external dependencies** -- network, database, file system
 - **Do not mock value objects** -- test with real instances of data classes/structs
 - **Do not mock the system under test** -- only mock its dependencies
+- **Use descriptive test names**: `test_[scenario]_should_[expectedResult]`
+- **Use `setUpWithError`** in XCTest, not the old `setUp()` (SwiftLint enforced)
+- **Use full file paths** with domain namespacing when referencing source files in test comments
 
 ### When to Use TDD
 

@@ -1,0 +1,92 @@
+name: rewrite-feature
+description: "Reverse-engineer a legacy feature and rewrite it from platform-agnostic specs"
+
+params:
+  feature:
+    description: "Feature name (e.g., 'issues-list', 'issue-details')"
+    required: true
+  screenshot:
+    description: "Path to legacy screenshot"
+    required: false
+  platform:
+    description: "Target platform for implementation (e.g., 'ios', 'android')"
+    default: "ios"
+
+steps:
+  - id: investigate
+    agent: ui-investigator
+    description: "Reverse-engineer the legacy UI into platform-agnostic component specs"
+    prompt: |
+      Investigate the legacy {{feature}} screen.
+      {{#if screenshot}}Screenshot at: {{screenshot}}{{/if}}
+
+      Produce:
+      1. screen-composition.md with component tree, ownership map, and blockers
+      2. One ui-spec.md per component
+
+      Save to ./specs/issues/ui/
+
+      Follow the investigate-ui skill process exactly.
+    auto_continue: false
+
+  - id: convert
+    agent: swift-implementor
+    description: "Convert agnostic specs to {{platform}} implementation plan"
+    prompt: |
+      Read the UI specs at ./specs/issues/ui/ (screen-composition.md + all ui-spec.md files).
+      Read the {{platform}} addendum at ./specs/issues/{{platform}}-addendum.md.
+
+      Convert to a platform-specific implementation plan:
+      1. Resolve all blockers (model/data layer changes)
+      2. Map spec elements to {{platform}} components
+      3. Generate ordered task list with dependencies
+      4. Save to ./specs/issues/ui/implementation-plan-{{platform}}.md
+
+      Follow the spec-to-platform skill process.
+    depends_on: [investigate]
+    auto_continue: false
+
+  - id: implement
+    agent: swift-implementor
+    description: "Implement the {{platform}} code from the plan"
+    prompt: |
+      Read the implementation plan at ./specs/issues/ui/implementation-plan-{{platform}}.md.
+
+      Execute each task in order:
+      1. Data model changes (blockers first)
+      2. Data layer changes
+      3. View components (leaf first, then containers)
+      4. Wiring into existing app
+
+      Follow the project's coding conventions from the {{platform}} addendum.
+      Do NOT modify existing files unless the plan explicitly says to.
+      Create new files for new components.
+    depends_on: [convert]
+    auto_continue: false
+
+  - id: audit
+    agent: alloy-auditor
+    description: "Verify design system compliance"
+    prompt: |
+      Audit the newly created/modified files from the implement step.
+      Check AlloyUI compliance, design token usage, and accessibility.
+      Report any violations.
+    depends_on: [implement]
+    auto_continue: true
+
+  - id: review
+    agent: issues-reviewer
+    description: "Review the implementation against the specs"
+    prompt: |
+      Compare the implementation against:
+      1. The platform-agnostic UI specs at ./specs/issues/ui/
+      2. The {{platform}} addendum conventions
+      3. The original screenshot {{#if screenshot}}at {{screenshot}}{{/if}}
+
+      Report:
+      - Spec compliance (does the code match the spec?)
+      - Missing elements
+      - Divergences from spec
+      - Code quality issues
+    depends_on: [audit]
+    auto_continue: true

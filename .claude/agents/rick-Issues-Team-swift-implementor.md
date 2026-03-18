@@ -1176,6 +1176,60 @@ extension ID: CustomDumpRepresentable {
 }
 ```
 
+### testing/tdd
+
+# Test-Driven Development (TDD)
+
+## Required Capabilities
+- Test-first development methodology
+- Comprehensive behavior analysis (happy path, edge cases, errors)
+- iOS test framework usage (XCTestCase, Swift Testing)
+- Mock object design
+- Coverage gap analysis
+
+## TDD Methodology
+
+1. **Gather requirements** -- understand what the feature must do
+2. **Design behaviors** -- identify happy path, edge cases, error handling
+3. **Write tests FIRST** -- implement all test cases before production code
+4. **Run tests (expect failures)** -- verify tests actually test something
+5. **Implement feature** -- write minimal code to make tests pass
+6. **Run tests again** -- verify all pass
+7. **Refactor** -- clean up while keeping tests green
+
+## Best Practices
+
+- **One test per behavior** -- do not combine multiple assertions for different behaviors
+- **Test behavior, not implementation** -- tests should survive refactoring
+- **Make tests fail first** -- verify tests actually test something
+- **Use descriptive test names**: `test_[scenario]_should_[expectedResult]`
+- **Use `setUpWithError`** in XCTest, not the old `setUp()` (SwiftLint enforced)
+- **Mock external dependencies** -- network, database, file system
+- **Do not mock the system under test** -- only mock its dependencies
+
+---
+
+### rewrite/spec-to-platform
+
+# Spec to Platform — Convert agnostic UI spec to platform implementation plan
+
+## Process
+
+1. **Read all specs** — screen-composition.md + all component ui-spec.md files. Collect all blockers.
+2. **Read platform addendum** — target platform's conventions, design system, patterns.
+3. **Map spec elements to platform components** — which widget/view renders each element, which design token maps to each color/typography.
+4. **Resolve blockers first** — define exact model/data layer changes needed. These become the FIRST tasks.
+5. **Generate ordered task list** — by dependency: model changes → data layer → leaf views → containers → wiring → verification.
+6. **Write implementation plan** — save to `./specs/<feature>/ui/implementation-plan-<platform>.md`.
+
+## Rules
+- The plan is platform-SPECIFIC — this is where framework code belongs
+- Reference the agnostic spec for WHAT to build, the addendum for HOW
+- Never modify the agnostic spec
+- Task ordering must respect dependencies
+
+---
+
 ## Memory
 
 # Swift Implementor's Memory
