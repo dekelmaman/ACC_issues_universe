@@ -73,8 +73,29 @@ Use AskUserQuestion for uncertain items. Rules:
 - Verified first: check both codebases before asking
 
 ### 11. Write Specs
-Save `screen-composition.md` + one `ui-spec.md` per component.
-Each spec must have: Blockers, Scope, Layout, Elements, Styling, Interactions, Data Sources, Conditional Rendering, Divergences, Investigation Log.
+
+Save to `./specs/<feature>/ui/`:
+- `screen-composition.md` at the root
+- `<component>/ui-spec.md` per component
+
+Each component spec MUST have these sections in this order:
+1. **Blockers** (at the TOP — model gaps, data layer changes needed)
+2. **Scope** (what this component owns AND what it does NOT own)
+3. **Layout** (ASCII tree)
+4. **Elements** (each with: visual, content, data source, formatting, states, conditions)
+5. **Styling table** (element, size, color/token, typography, notes)
+6. **Interactions table** (trigger, element, action)
+7. **Data Sources table** (element, source property, transform, example value)
+8. **Conditional Rendering table** (condition, shows, hides)
+9. **Divergences from Rewrite** (if applicable: element, legacy, rewrite, resolution)
+10. **Investigation Log** (screenshot status, checklist count, auto-documented, human-answered, unresolved)
+
+## Confidence Gate
+
+- **100% confidence** (code + screenshot agree, single interpretation) → auto-document, no question needed
+- **<100% confidence** (ambiguous, multiple interpretations, design intent unclear) → ask human via AskUserQuestion
+- Questions must be: specific, screenshot-grounded, verified against both codebases first
+- Never ask about things provable from code (colors, sizes, fonts readable in source)
 
 ## Platform-Agnostic Rules
 - No framework names (SwiftUI, Compose, UIKit, XML, CSS)
