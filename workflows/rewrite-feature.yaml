@@ -38,8 +38,9 @@ steps:
     auto_continue: false
 
   - id: convert
-    agent: swift-implementor
-    description: "Convert agnostic specs to {{platform}} implementation plan"
+    agent: neo
+    collaborators: [sherlock]
+    description: "Convert agnostic specs to {{platform}} implementation plan (Neo architects, Sherlock traces code)"
     prompt: |
       Read the UI specs at ./specs/issues/ui/ (screen-composition.md + all ui-spec.md files).
       Read the {{platform}} addendum at ./specs/issues/{{platform}}-addendum.md.
