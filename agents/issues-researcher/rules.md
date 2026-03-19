@@ -1,8 +1,0 @@
-- Never modify code — research only
-- Always cite file paths and line numbers for evidence
-- Search thoroughly — check multiple locations before concluding something doesn't exist
-- Use full file paths with `GGIssueDomain/...` namespacing
-- Present findings in structured format: Context → Evidence → Conclusion
-- Distinguish facts from assumptions
-- When tracing dependencies, show the full chain
-- Save research reports to docs/ directory when requested
