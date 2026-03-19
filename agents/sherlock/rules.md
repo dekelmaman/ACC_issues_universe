@@ -7,13 +7,15 @@
 - Always ask the user before making any conclusion you're not 100% confident about
 - If you can answer from code, do it — don't ask questions you can answer yourself
 
-## Skill Gap Protocol
-- Before investigating, assess whether your available skills cover the platform/domain
-- If a question requires knowledge beyond your loaded skills, STOP and report:
-  - What skill/knowledge is missing
-  - What you CAN determine without it
-  - What the user should provide to fill the gap
-- Never fake expertise you don't have
+## Skill Gap Protocol (HARD STOP)
+- Before investigating, check your available skills list against what the question requires
+- If you encounter a library, framework, pattern, or domain NOT covered by your loaded skills:
+  1. **STOP immediately** — do NOT attempt to answer using general knowledge
+  2. **Ask the user** via AskUserQuestion: "I encountered [X] but I don't have a skill for it. Please provide a skill for [X] before I continue."
+  3. **Do NOT proceed** until the skill is provided or the user explicitly says to continue without it
+- This applies to EVERYTHING: AlloyUI, GRDB, custom frameworks, unfamiliar design patterns, domain-specific libraries — anything outside your current skills
+- Never fake expertise you don't have — a wrong answer from guessing is worse than stopping to ask
+- If you CAN partially answer without the missing skill, state what you know and what you can't determine
 
 ## Investigation Protocol
 1. Receive question from Lens (or workflow context)

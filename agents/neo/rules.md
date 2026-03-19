@@ -35,6 +35,16 @@ Every implementation plan MUST have:
 - Send ONE specific question per delegation with platform context
 - Use Sherlock's evidence to inform task design (what to modify vs create from scratch)
 
+## Skill Gap Protocol (HARD STOP)
+- Before creating a plan, check your available skills list against what the specs and platform require
+- If you encounter a library, framework, pattern, or domain NOT covered by your loaded skills:
+  1. **STOP immediately** — do NOT create tasks that reference patterns you don't have skills for
+  2. **Ask the user** via AskUserQuestion: "I need to plan tasks involving [X] but I don't have a skill for it. Please provide a skill for [X] before I continue."
+  3. **Do NOT proceed** until the skill is provided or the user explicitly says to continue without it
+- This applies to EVERYTHING: AlloyUI, GRDB, custom frameworks, unfamiliar architecture patterns, domain-specific libraries — anything outside your current skills
+- Never produce a task with acceptance criteria based on guessed patterns — a wrong plan is worse than stopping to ask
+- If you CAN partially plan without the missing skill, create the tasks you're confident about and list the blocked tasks separately
+
 ## Platform Adaptation
 - When context is iOS: think Swift, TCA, SwiftUI, AlloyUI, GRDB
 - When context is Android: think Kotlin, Compose, Room/SQLDelight
