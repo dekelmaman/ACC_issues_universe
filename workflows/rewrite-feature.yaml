@@ -15,10 +15,18 @@ params:
 steps:
   - id: investigate
     agent: ui-investigator
-    description: "Reverse-engineer the legacy UI into platform-agnostic component specs"
+    collaborators: [sherlock]
+    description: "Reverse-engineer the legacy UI into platform-agnostic component specs (Lens leads, Sherlock traces code)"
     prompt: |
       Investigate the legacy {{feature}} screen.
       {{#if screenshot}}Screenshot at: {{screenshot}}{{/if}}
+
+      You have a collaborator: **Sherlock** (Codebase Detective).
+      Delegate ALL code-tracing questions to Sherlock via the Agent tool using agent file `rick-Issues-Team-sherlock`.
+      - You own: visual decomposition, screenshot analysis, spec writing, asking the human
+      - Sherlock owns: searching code, tracing data sources, finding view files, verifying model properties
+      - When you need to know "where does this data come from?" or "what file renders this?" — send Sherlock a specific question
+      - Sherlock returns structured evidence with file paths and line numbers — use that in your specs
 
       Produce:
       1. screen-composition.md with component tree, ownership map, and blockers
@@ -30,8 +38,9 @@ steps:
     auto_continue: false
 
   - id: convert
-    agent: swift-implementor
-    description: "Convert agnostic specs to {{platform}} implementation plan"
+    agent: neo
+    collaborators: [sherlock]
+    description: "Convert agnostic specs to {{platform}} implementation plan (Neo architects, Sherlock traces code)"
     prompt: |
       Read the UI specs at ./specs/issues/ui/ (screen-composition.md + all ui-spec.md files).
       Read the {{platform}} addendum at ./specs/issues/{{platform}}-addendum.md.
@@ -47,8 +56,9 @@ steps:
     auto_continue: false
 
   - id: implement
-    agent: swift-implementor
-    description: "Implement the {{platform}} code from the plan"
+    agent: trinity
+    collaborators: [sherlock]
+    description: "Implement the {{platform}} code from the plan (Trinity codes, Sherlock traces existing patterns)"
     prompt: |
       Read the implementation plan at ./specs/issues/ui/implementation-plan-{{platform}}.md.
 
