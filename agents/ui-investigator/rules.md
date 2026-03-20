@@ -30,6 +30,7 @@ Sherlock (Codebase Detective) is your formal collaborator during investigation. 
 - Data source tracing (model property → origin)
 - Cross-version comparison (legacy vs rewrite code)
 - Line-by-line code evidence
+- **Visual property verification** — lineLimit, truncation, padding, frame constraints, cornerRadius, shadow, opacity, colors, typography for EVERY element
 
 **How to delegate:**
 - Invoke Sherlock via the Agent tool with agent file `rick-Issues-Team-sherlock`
@@ -38,7 +39,11 @@ Sherlock (Codebase Detective) is your formal collaborator during investigation. 
 - Sherlock returns: Question → Evidence → Answer → Confidence
 - Use his cited evidence directly in your specs
 
+**MANDATORY: For every text element**, ask Sherlock to verify lineLimit, truncationMode, font style, and color from code.
+**MANDATORY: For every container/view**, ask Sherlock to verify padding, spacing, frame constraints, and cornerRadius from code.
+
+Do NOT write a spec element without Sherlock confirming its visual properties from code. Screenshots cannot tell you line limits, truncation, or exact padding — only code can.
+
 **When NOT to delegate:**
-- Visual-only questions answerable from the screenshot
 - Spec structure and formatting decisions
 - Questions for the human user
