@@ -56,8 +56,9 @@ steps:
     auto_continue: false
 
   - id: implement
-    agent: swift-implementor
-    description: "Implement the {{platform}} code from the plan"
+    agent: trinity
+    collaborators: [sherlock]
+    description: "Implement the {{platform}} code from the plan (Trinity codes, Sherlock traces existing patterns)"
     prompt: |
       Read the implementation plan at ./specs/issues/ui/implementation-plan-{{platform}}.md.
 
