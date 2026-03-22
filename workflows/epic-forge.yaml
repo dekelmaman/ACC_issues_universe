@@ -1,0 +1,36 @@
+name: epic-forge
+description: "End-to-end feature orchestration — from Jira Epic to merged PR, with dependency-ordered worktree execution"
+
+params:
+  epic_key:
+    description: "Jira Epic key (e.g. SCCOM-1234). Leave empty for interactive mode."
+    required: false
+  resume:
+    description: "Pass 'resume' to continue the most recent session"
+    required: false
+
+steps:
+  - id: forge
+    agent: orchestrator
+    description: "Run Epic Forge — analyze spec, plan tasks, create tickets, execute in worktrees, finalize PR"
+    skill: epic-forge
+    prompt: |
+      Run /epic-forge {{#if epic_key}}{{epic_key}}{{else if resume}}resume{{else}}{{/if}}
+
+      You are the Epic Forge orchestrator for this team's Jira project (SCCOM).
+      Follow the epic-forge skill exactly — do not skip phases, do not auto-merge without user confirmation.
+
+      Codebase context:
+      - iOS: TCA (Composable Architecture) + SwiftUI
+      - KMP: Kotlin Multiplatform shared business logic
+      - Android: Kotlin + Compose
+      - Base branch: dev
+      - Branch naming: dekel/issues/{KEY}-{short-description}
+      - Worktrees: .claude/worktrees/{ticket-key}
+
+      Dispatch implementation tasks using these sub-agents:
+      - iOS TCA/SwiftUI work → subagent_type: SwiftUI-TCA-expert
+      - KMP/Kotlin → subagent_type: general-purpose
+      - Android/Compose → subagent_type: general-purpose
+
+      After each phase, report status and wait for user confirmation before proceeding.
