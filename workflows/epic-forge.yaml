@@ -35,5 +35,3 @@ steps:
       - iOS TCA/SwiftUI work → subagent_type: SwiftUI-TCA-expert
       - KMP/Kotlin → subagent_type: general-purpose
       - Android/Compose → subagent_type: general-purpose
-
-      After each phase, report status and wait for user confirmation before proceeding.
