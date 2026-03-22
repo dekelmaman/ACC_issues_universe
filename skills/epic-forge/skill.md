@@ -30,7 +30,7 @@ This skill is available as a Claude Code global skill (`/epic-forge`). Invoke it
 1. **Analyze** — Fetch Jira Epic, gather spec, ask clarifying questions, produce `spec.md`
 2. **Plan** — Explore codebase, break work into dependency-layered tasks, get user approval
 3. **Tickets** — Create Jira child tickets linked to the Epic, one per task
-4. **Setup** — Create main feature branch (`dekel/issues/{EPIC-KEY}-{name}`)
+4. **Setup** — Create main feature branch (`{user-prefix}/issues/{EPIC-KEY}-{name}`)
 5. **Execute** — Implement each ticket in its own worktree, in dependency order, with PRs against the feature branch
 6. **Finalize** — Create final PR from feature branch to `dev`
 
@@ -42,14 +42,27 @@ This skill is available as a Claude Code global skill (`/epic-forge`). Invoke it
 - State persists in `.agents/epic-forge/{epic-key}/` for resumability
 - At most 2-3 implementation agents run in parallel
 
+## Branch Prefix
+
+Branch naming uses a per-user prefix: `{prefix}/issues/{KEY}-{short-description}`.
+
+On first run, Epic Forge asks the user: _"What's your branch prefix? (e.g. your name or initials)"_
+The answer is saved to `.agents/epic-forge/user-config.json`:
+```json
+{ "branchPrefix": "john" }
+```
+On all subsequent runs, the prefix is loaded from this file — never asked again.
+
 ## State Files
 
 ```
-.agents/epic-forge/{epic-key}/
-  state.json    # Progress tracker (phase, tasks, statuses)
-  spec.md       # Feature understanding
-  plan.md       # Dependency-ordered task list
-  status.md     # Human-readable dashboard
+.agents/epic-forge/
+  user-config.json   # Per-user config (branchPrefix)
+  {epic-key}/
+    state.json    # Progress tracker (phase, tasks, statuses)
+    spec.md       # Feature understanding
+    plan.md       # Dependency-ordered task list
+    status.md     # Human-readable dashboard
 ```
 
 ## Required Tools

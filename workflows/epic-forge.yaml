@@ -25,7 +25,10 @@ steps:
       - KMP: Kotlin Multiplatform shared business logic
       - Android: Kotlin + Compose
       - Base branch: dev
-      - Branch naming: dekel/issues/{KEY}-{short-description}
+      - Branch naming: {user-prefix}/issues/{KEY}-{short-description}
+        → On first run, ask the user for their branch prefix (e.g. "john", "jane").
+        → Save it to `.agents/epic-forge/user-config.json` as `{ "branchPrefix": "..." }`.
+        → On subsequent runs, load it from there — do NOT ask again.
       - Worktrees: .claude/worktrees/{ticket-key}
 
       Dispatch implementation tasks using these sub-agents:
