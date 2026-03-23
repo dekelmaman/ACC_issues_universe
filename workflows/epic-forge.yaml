@@ -31,6 +31,10 @@ steps:
         → On subsequent runs, load it from there — do NOT ask again.
       - Worktrees: .claude/worktrees/{ticket-key}
 
+      iOS Worktree Bootstrap (REQUIRED — apply `ios/worktree-bootstrap` skill after every
+      `git worktree add` for an iOS ticket, before dispatching the implementation agent).
+      Do NOT run `make ios-build-ready` — requires Artifactory credentials unavailable in agent context.
+
       Dispatch implementation tasks using these sub-agents:
       - iOS TCA/SwiftUI work → subagent_type: SwiftUI-TCA-expert
       - KMP/Kotlin → subagent_type: general-purpose
