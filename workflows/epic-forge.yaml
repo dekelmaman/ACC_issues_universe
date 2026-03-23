@@ -10,9 +10,42 @@ params:
     required: false
 
 steps:
+  - id: fetch-epic
+    agent: shimi-t
+    description: "Fetch the Epic and its child tickets from Jira — Shimi-T owns all Jira reads"
+    prompt: |
+      {{#if epic_key}}
+      Fetch the Jira Epic {{epic_key}} and all its child tickets.
+      {{else}}
+      Ask the user for the Jira Epic key they want to forge, then fetch it and all its child tickets.
+      {{/if}}
+
+      For each item, collect:
+      - Key, summary, description, status, assignee, story points (if set)
+      - Acceptance criteria (from description or custom field)
+      - Any linked issues or blockers
+
+      Output a structured summary in this format:
+      ```
+      EPIC: [KEY] | [Title] | Status: [status]
+      Description: [summary]
+
+      CHILD TICKETS:
+      | Key | Summary | Status | Assignee | Points |
+      |-----|---------|--------|----------|--------|
+      ...
+
+      BLOCKERS / LINKED:
+      [list any dependencies found]
+      ```
+
+      Do NOT transition any tickets yet. Read-only phase.
+    auto_continue: true
+
   - id: forge
     agent: orchestrator
-    description: "Run Epic Forge — analyze spec, plan tasks, create tickets, execute in worktrees, finalize PR"
+    collaborators: [shimi-t]
+    description: "Analyze spec, plan tasks, execute in worktrees — Shimi-T handles ALL Jira operations"
     skill: epic-forge
     prompt: |
       Run /epic-forge {{#if epic_key}}{{epic_key}}{{else if resume}}resume{{else}}{{/if}}
@@ -20,22 +53,56 @@ steps:
       You are the Epic Forge orchestrator for this team's Jira project (SCCOM).
       Follow the epic-forge skill exactly — do not skip phases, do not auto-merge without user confirmation.
 
+      ## CRITICAL: Jira Delegation Rule
+      You have a collaborator: **Shimi-T** (Scrum Master).
+      Shimi-T owns ALL Jira operations. You MUST delegate every Jira action to her:
+      - Fetching issue details → Shimi-T
+      - Creating child tickets → Shimi-T
+      - Transitioning ticket statuses → Shimi-T
+      - Posting comments on tickets → Shimi-T
+      - Searching for issues → Shimi-T
+
+      To delegate to Shimi-T, use the Agent tool:
+        name: "Shimi-T"
+        subagent_type: the compiled agent at `.claude/agents/rick-Issues-Team-shimi-t.md`
+        prompt: "You are Shimi-T (Scrum Master). Read your persona at `.claude/agents/rick-Issues-Team-shimi-t.md` first. Then: [your Jira request here]"
+
+      You do NOT call Jira MCP tools directly. You ask Shimi-T to do it and use her output.
+
+      ## Epic Forge Phases (updated for Shimi-T delegation)
+
+      **Phase 1 — Analyze**: The previous step (fetch-epic) already fetched the Epic data.
+      Use that output as your starting context. Ask Shimi-T for any additional ticket details you need.
+
+      **Phase 2 — Plan**: Explore the codebase, break work into dependency-layered tasks.
+      Get user approval on the plan before proceeding.
+
+      **Phase 3 — Tickets**: Ask Shimi-T to create child Jira tickets for each planned task.
+      Provide her with: summary, description, acceptance criteria, issue type, and parent Epic key.
+      Wait for Shimi-T's confirmation that each ticket was created before proceeding.
+
+      **Phase 4 — Setup**: Create the main feature branch.
+      Branch naming: {user-prefix}/issues/{EPIC-KEY}-{short-description}
+      → On first run, ask the user for their branch prefix. Save to `.agents/epic-forge/user-config.json`.
+      → On subsequent runs, load from there — do NOT ask again.
+
+      **Phase 5 — Execute**: Implement each ticket in its own worktree, in dependency order.
+      - Worktrees: .claude/worktrees/{ticket-key}
+      - iOS worktrees: apply `ios/worktree-bootstrap` skill after every `git worktree add`
+      - Do NOT run `make ios-build-ready`
+      - When a ticket's implementation is complete: ask Shimi-T to transition it to "In Review"
+        and post a comment with the PR link
+      - Sub-agents for implementation:
+        → iOS TCA/SwiftUI → subagent_type: SwiftUI-TCA-expert
+        → KMP/Kotlin → subagent_type: general-purpose
+        → Android/Compose → subagent_type: general-purpose
+
+      **Phase 6 — Finalize**: Create final PR from feature branch to `dev`.
+      Ask Shimi-T to transition the Epic itself to "In Review" and post the final PR link as a comment.
+      Only after user confirmation.
+
       Codebase context:
       - iOS: TCA (Composable Architecture) + SwiftUI
       - KMP: Kotlin Multiplatform shared business logic
       - Android: Kotlin + Compose
       - Base branch: dev
-      - Branch naming: {user-prefix}/issues/{KEY}-{short-description}
-        → On first run, ask the user for their branch prefix (e.g. "john", "jane").
-        → Save it to `.agents/epic-forge/user-config.json` as `{ "branchPrefix": "..." }`.
-        → On subsequent runs, load it from there — do NOT ask again.
-      - Worktrees: .claude/worktrees/{ticket-key}
-
-      iOS Worktree Bootstrap (REQUIRED — apply `ios/worktree-bootstrap` skill after every
-      `git worktree add` for an iOS ticket, before dispatching the implementation agent).
-      Do NOT run `make ios-build-ready` — requires Artifactory credentials unavailable in agent context.
-
-      Dispatch implementation tasks using these sub-agents:
-      - iOS TCA/SwiftUI work → subagent_type: SwiftUI-TCA-expert
-      - KMP/Kotlin → subagent_type: general-purpose
-      - Android/Compose → subagent_type: general-purpose

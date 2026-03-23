@@ -11,8 +11,24 @@ params:
   platform:
     description: "Target platform for implementation (e.g., 'ios', 'android')"
     default: "ios"
+  ticket_key:
+    description: "Jira ticket key for this rewrite (e.g. SCCOM-1234). Optional — skips ticket steps if not provided."
+    required: false
 
 steps:
+  - id: fetch-ticket
+    agent: shimi-t
+    description: "Fetch the Jira ticket for this rewrite so its context informs the investigation"
+    skip_if: "{{#unless ticket_key}}true{{/unless}}"
+    prompt: |
+      Fetch the Jira ticket {{ticket_key}} and return its full details:
+      - Summary, description, acceptance criteria
+      - Current status, assignee
+      - Any linked tickets or blockers
+
+      Output a structured summary. Do NOT transition the ticket yet — read-only phase.
+    auto_continue: true
+
   - id: investigate
     agent: ui-investigator
     collaborators: [sherlock]
@@ -20,6 +36,10 @@ steps:
     prompt: |
       Investigate the legacy {{feature}} screen.
       {{#if screenshot}}Screenshot at: {{screenshot}}{{/if}}
+      {{#if ticket_key}}
+      Jira ticket context from the previous step is available — use the acceptance criteria
+      to validate your spec against what the ticket requires.
+      {{/if}}
 
       You have a collaborator: **Sherlock** (Codebase Detective).
       Delegate ALL code-tracing questions to Sherlock via the Agent tool using agent file `rick-Issues-Team-sherlock`.
@@ -35,7 +55,26 @@ steps:
       Save to ./specs/issues/ui/
 
       Follow the investigate-ui skill process exactly.
+    depends_on: [fetch-ticket]
     auto_continue: false
+
+  - id: start-ticket
+    agent: shimi-t
+    description: "Move the Jira ticket to In Progress — work is starting"
+    skip_if: "{{#unless ticket_key}}true{{/unless}}"
+    prompt: |
+      Transition ticket {{ticket_key}} to "In Progress".
+
+      Follow the full transition protocol:
+      1. Fetch the ticket's current status
+      2. Get available transitions
+      3. Confirm the In Progress transition is available
+      4. Execute the transition
+      5. Post a comment: "Investigation complete. Rewrite of {{feature}} feature starting on {{platform}}."
+
+      Output: `SHIMI-T HANDOFF → Neo` with ticket key and a 1-sentence summary of what the ticket asks for.
+    depends_on: [investigate]
+    auto_continue: true
 
   - id: convert
     agent: neo
@@ -52,7 +91,7 @@ steps:
       4. Save to ./specs/issues/ui/implementation-plan-{{platform}}.md
 
       Follow the spec-to-platform skill process.
-    depends_on: [investigate]
+    depends_on: [start-ticket]
     auto_continue: false
 
   - id: implement
@@ -100,3 +139,21 @@ steps:
       - Code quality issues
     depends_on: [audit]
     auto_continue: true
+
+  - id: finish-ticket
+    agent: shimi-t
+    description: "Move the Jira ticket to In Review — implementation is done, PR is ready for review"
+    skip_if: "{{#unless ticket_key}}true{{/unless}}"
+    prompt: |
+      Transition ticket {{ticket_key}} to "In Review".
+
+      Follow the full transition protocol:
+      1. Fetch the ticket's current status (should be In Progress)
+      2. Get available transitions
+      3. Confirm the In Review transition is available
+      4. Execute the transition
+      5. Post a comment: "Implementation of {{feature}} on {{platform}} complete. Audit and spec review passed. Ready for human review."
+
+      If the ticket is not In Progress (e.g. someone moved it), surface the current status and ask the user how to proceed — do NOT guess.
+    depends_on: [review]
+    auto_continue: false
