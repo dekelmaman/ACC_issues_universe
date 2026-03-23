@@ -41,6 +41,7 @@ This skill is available as a Claude Code global skill (`/epic-forge`). Invoke it
 - Tasks with unmerged dependencies are **blocked** — dependency gate is strict
 - State persists in `.agents/epic-forge/{epic-key}/` for resumability
 - At most 2-3 implementation agents run in parallel
+- **Every iOS worktree must be bootstrapped immediately after `git worktree add`** — use the `ios/worktree-bootstrap` skill. Do NOT run `make ios-build-ready`.
 
 ## Branch Prefix
 
@@ -71,3 +72,7 @@ On all subsequent runs, the prefix is loaded from this file — never asked agai
 - `git worktree`, `gh pr create` — Branch and PR management
 - Agent tool (Task) — Dispatch implementation sub-agents
 - File read/write — State persistence
+
+## Related Skills
+
+- **`ios/worktree-bootstrap`** — Must be applied to every iOS worktree after creation. Handles Pods, SPM packages, Gemfile, and local package symlinks without requiring Artifactory credentials or VPN.
