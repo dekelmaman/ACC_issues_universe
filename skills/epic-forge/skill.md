@@ -27,12 +27,12 @@ This skill is available as a Claude Code global skill (`/epic-forge`). Invoke it
 
 ## Phases
 
-1. **Analyze** — Fetch Jira Epic, gather spec, ask clarifying questions, produce `spec.md`
+1. **Analyze** — Delegate to Shimi-T: fetch Jira Epic + child tickets. Use her output as spec input. Ask clarifying questions, produce `spec.md`
 2. **Plan** — Explore codebase, break work into dependency-layered tasks, get user approval
-3. **Tickets** — Create Jira child tickets linked to the Epic, one per task
+3. **Tickets** — Delegate to Shimi-T: create Jira child tickets linked to the Epic, one per task
 4. **Setup** — Create main feature branch (`{user-prefix}/issues/{EPIC-KEY}-{name}`)
-5. **Execute** — Implement each ticket in its own worktree, in dependency order, with PRs against the feature branch
-6. **Finalize** — Create final PR from feature branch to `dev`
+5. **Execute** — Implement each ticket in its own worktree, in dependency order, with PRs against feature branch. After each ticket completes: delegate to Shimi-T to transition it to "In Review" and post the PR link.
+6. **Finalize** — Create final PR from feature branch to `dev`. Delegate to Shimi-T to transition the Epic to "In Review" and post the final PR link.
 
 ## Key Constraints
 
@@ -68,9 +68,16 @@ On all subsequent runs, the prefix is loaded from this file — never asked agai
 
 ## Required Tools
 
-- `jira_getIssue`, `jira_searchIssues`, `jira_createIssue`, `jira_transitionIssue` — Jira lifecycle
+- **Shimi-T (Scrum Master)** — ALL Jira operations are delegated to Shimi-T via the Agent tool.
+  Do NOT call Jira MCP tools directly. Ask Shimi-T to:
+  - Fetch Epic and child ticket data → `jira_getIssue`, `jira_searchIssues`
+  - Create child tickets → `jira_createIssue`
+  - Transition ticket statuses → `jira_getTransitions` + `jira_transitionIssue`
+  - Post progress comments → `jira_postIssueComment`
+  Delegation pattern: Agent tool, name "Shimi-T", prompt starts with
+  "You are Shimi-T (Scrum Master). Read your persona at `.claude/agents/rick-Issues-Team-shimi-t.md` first. Then: [request]"
 - `git worktree`, `gh pr create` — Branch and PR management
-- Agent tool (Task) — Dispatch implementation sub-agents
+- Agent tool (Task) — Dispatch Shimi-T for Jira + implementation sub-agents for code
 - File read/write — State persistence
 
 ## Related Skills
