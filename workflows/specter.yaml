@@ -1,5 +1,5 @@
-name: rewrite-feature
-description: "Reverse-engineer a legacy feature and rewrite it from platform-agnostic specs"
+name: specter
+description: "Extract platform-agnostic specs from existing design and code, then implement from those specs"
 
 params:
   feature:
