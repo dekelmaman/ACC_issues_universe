@@ -1,0 +1,298 @@
+name: bug-fix-from-jira
+description: "End-to-end Jira bug fix — research, reproduce, fix, validate with the same test plan"
+
+params:
+  ticket_key:
+    description: "Jira ticket key (e.g. SCCOM-12345)"
+    required: true
+  platform:
+    description: "Target platform: android, ios, kmp"
+    default: "android"
+
+steps:
+  # ===================================================
+  # PHASE 1: RESEARCH (from ticket-research)
+  # ===================================================
+
+  - id: fetch-ticket
+    agent: shimi-t
+    description: "Fetch the Jira ticket with ALL comments, linked issues, and full context"
+    prompt: |
+      Fetch the Jira ticket {{ticket_key}} and return its FULL details:
+      - Summary, description, acceptance criteria
+      - Current status, assignee, reporter
+      - ALL comments (often contain repro steps or prior investigation)
+      - Any linked issues or blockers
+      - Attachments list (if any)
+
+      Output structured as:
+      ```
+      TICKET: {{ticket_key}}
+      Summary: [title]
+      Status: [status] | Assignee: [assignee] | Reporter: [reporter]
+
+      DESCRIPTION:
+      [full description]
+
+      ACCEPTANCE CRITERIA:
+      [if present]
+
+      COMMENTS (chronological):
+      [date] [author]: [content]
+
+      LINKED ISSUES:
+      [list with relationship type]
+
+      KEY CONTEXT FOR INVESTIGATION:
+      [extract the most relevant clues — repro steps, error messages, screenshots mentioned]
+      ```
+
+      Do NOT transition the ticket. Read-only.
+    auto_continue: true
+
+  - id: investigate
+    agent: ui-investigator
+    collaborators: [sherlock]
+    description: "Deep code research — identify relevant screens/flows, Sherlock traces code"
+    prompt: |
+      Using the ticket context from the previous step, investigate the
+      relevant code for bug {{ticket_key}} on {{platform}}.
+
+      You have a collaborator: **Sherlock** (Codebase Detective).
+      - You own: identifying which screens, components, and user flows are relevant
+      - Sherlock owns: searching code, tracing call chains, finding files, verifying data sources
+
+      ## Rules
+      1. Ask the user when unsure — don't guess between ambiguous code paths
+      2. Don't deep-dive files you're not confident are relevant
+      3. Start from what the ticket describes and trace backwards to code
+
+      Output:
+      ```
+      INVESTIGATION SUMMARY — {{ticket_key}}
+
+      RELEVANT SCREENS/FLOWS:
+      - [screen] -> [file]:[line] — [why relevant]
+
+      CODE TRACE:
+      - [component] at [file]:[line] — [what it does]
+
+      PROPOSED ROOT CAUSE:
+      [assessment of where the bug likely lives and why]
+
+      CONFIDENCE: [high/medium/low]
+
+      OPEN QUESTIONS:
+      - [anything needing user clarification]
+      ```
+    depends_on: [fetch-ticket]
+    auto_continue: false
+
+  - id: arch-review
+    agent: neo
+    collaborators: [sherlock]
+    description: "Architectural review — validate investigation, catch legacy/new confusion"
+    prompt: |
+      Using the ticket context from fetch-ticket, perform an independent
+      architectural assessment of bug {{ticket_key}}.
+
+      Delegate code-tracing to **Sherlock** when needed.
+
+      Apply your deep app knowledge:
+      - PG Tasks (legacy) vs GG Issues (new Compose/Mobius) — we use NEW
+      - KMP shared layer vs platform-specific — know which owns the logic
+      - Recent migrations that moved code
+
+      Output:
+      ```
+      ARCHITECTURAL ASSESSMENT — {{ticket_key}}
+
+      LIKELY CODE AREA:
+      - [component/module] — [why]
+
+      ACTIVE vs LEGACY CHECK:
+      - [any confusion risks]
+
+      DATA FLOW:
+      [how data flows for this feature area]
+
+      POTENTIAL PITFALLS:
+      - [things code-level investigation might miss]
+
+      MY ASSESSMENT:
+      [where the bug most likely lives, architecturally]
+
+      CONFIDENCE: [high/medium/low]
+      ```
+    depends_on: [fetch-ticket]
+    parallel_with: [investigate]
+    auto_continue: false
+
+  # ===================================================
+  # PHASE 2: REPRODUCE (from test-and-validate)
+  # ===================================================
+
+  - id: discover-test-surface
+    agent: sherlock
+    description: "Map the testable surface for reproducing this bug"
+    prompt: |
+      Goal: Reproduce bug {{ticket_key}} on {{platform}}.
+      Use the investigation and architectural review from prior steps.
+
+      Trace the full path the bug touches:
+      - UI entry points (screens, buttons, fields)
+      - Business logic (view models, reducers, use cases)
+      - Data layer (repositories, API calls, local storage)
+      - Existing tests that cover parts of this area
+
+      Output:
+      ```
+      TESTABLE SURFACE for reproducing: {{ticket_key}}
+
+      UI LAYER: [screens/components with file paths]
+      LOGIC LAYER: [view models/reducers with file paths]
+      DATA LAYER: [repos/APIs with file paths]
+
+      EXISTING TEST COVERAGE:
+      - [test file] covers [what aspect]
+
+      GAPS: [what has no test coverage — especially the bug path]
+
+      REPRODUCTION PATH:
+      [the specific user flow / code path that triggers the bug]
+      ```
+    depends_on: [investigate, arch-review]
+    auto_continue: true
+
+  - id: plan-reproduction
+    agent: neo
+    description: "Design the test strategy to reproduce and later validate the fix"
+    prompt: |
+      Based on Sherlock's testable surface, design a test strategy for
+      bug {{ticket_key}} on {{platform}}.
+
+      This strategy serves TWO purposes:
+      1. **Now**: Reproduce/confirm the bug exists
+      2. **Later**: Validate the fix works (same tests, should flip from fail->pass)
+
+      Choose from:
+      - **Unit tests**: For isolated logic bugs
+      - **Integration tests**: For data flow bugs
+      - **Maestro UI tests**: For end-to-end user flow bugs
+      - **Manual verification steps**: For things hard to automate
+
+      For each test specify:
+      - Test type and WHY
+      - What it validates
+      - Key assertions (should FAIL before fix, PASS after)
+      - File location
+
+      IMPORTANT: Design tests that FAIL on the current buggy code.
+      These same tests must PASS after the fix — that's the proof.
+
+      Output as: REPRODUCTION TEST PLAN
+      Save to: ./specs/bugs/{{ticket_key}}/test-plan.md
+    depends_on: [discover-test-surface]
+    auto_continue: false
+
+  # ===================================================
+  # PHASE 3: FIX (from bug-fix)
+  # ===================================================
+
+  - id: locate
+    agent: sherlock
+    description: "Pinpoint the exact root cause using all prior research"
+    prompt: |
+      Using ALL prior context (ticket, investigation, arch review, test surface),
+      pinpoint the EXACT code causing bug {{ticket_key}}.
+
+      You've already done broad research. Now go surgical:
+      - Root cause file(s) and line(s)
+      - Why it's broken (the mechanism)
+      - What the fix should do (intent, not code)
+
+      Don't re-explore the whole feature. Just confirm the broken path.
+    depends_on: [plan-reproduction]
+    auto_continue: true
+
+  - id: fix
+    agent: trinity
+    description: "Implement the minimal fix"
+    prompt: |
+      Using Sherlock's root cause analysis, implement the fix for {{ticket_key}}.
+
+      Rules:
+      - MINIMAL change. Fix the bug, nothing else.
+      - No refactoring. No "while I'm here" improvements.
+      - No new files unless absolutely necessary.
+      - Follow {{platform}} conventions from the codebase.
+      - If the fix touches shared KMP code, note affected platforms.
+
+      After fixing, list exactly what changed and why.
+    depends_on: [locate]
+    auto_continue: true
+
+  - id: review-fix
+    agent: issues-reviewer
+    description: "Verify the fix addresses root cause without regressions"
+    prompt: |
+      Review Trinity's fix for {{ticket_key}} against Sherlock's root cause.
+
+      Check:
+      1. Does it fix the ACTUAL root cause (not just the symptom)?
+      2. Could it introduce regressions? Check callers of modified code.
+      3. Is it minimal — no unnecessary changes?
+      4. Does it follow project conventions?
+
+      Verdict: PASS or FAIL (with specific issues).
+      If FAIL, list what needs to change before proceeding.
+    depends_on: [fix]
+    auto_continue: false
+
+  # ===================================================
+  # PHASE 4: VALIDATE (reuse Phase 2 test plan)
+  # ===================================================
+
+  - id: implement-and-run-tests
+    agent: trinity
+    description: "Implement tests from the reproduction plan and run them against the fix"
+    prompt: |
+      Read the test plan at ./specs/bugs/{{ticket_key}}/test-plan.md
+
+      Implement ALL tests from the plan. These were designed to:
+      - FAIL on the buggy code (reproduction)
+      - PASS on the fixed code (validation)
+
+      Rules:
+      - Follow existing test patterns in the codebase
+      - For Maestro tests: use maestro skill conventions
+      - For unit tests: use project's test framework
+      - Clear test names describing what they validate
+
+      After writing, RUN the tests.
+      - If they PASS -> the fix works. Report success.
+      - If they FAIL -> the fix is incomplete. Report which tests fail and why.
+    depends_on: [review-fix]
+    auto_continue: true
+
+  - id: final-validation
+    agent: issues-reviewer
+    description: "Final review — fix + tests together prove the bug is resolved"
+    prompt: |
+      Final validation for {{ticket_key}}:
+
+      1. Read the original ticket context (from fetch-ticket)
+      2. Read the test plan at ./specs/bugs/{{ticket_key}}/test-plan.md
+      3. Review the implemented tests
+      4. Review the fix
+
+      Confirm:
+      - Tests match the test plan
+      - Tests actually validate the bug scenario (not just tangential code)
+      - Fix is minimal and correct
+      - Tests pass with the fix applied
+      - No regressions introduced
+
+      Final verdict: VALIDATED or NEEDS WORK (with specifics).
+    depends_on: [implement-and-run-tests]
+    auto_continue: false

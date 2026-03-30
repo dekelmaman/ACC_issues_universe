@@ -1,0 +1,67 @@
+name: bug-fix
+description: "Focused bug fix — locate, fix, review. No research preamble, no PR ceremony."
+
+params:
+  ticket_key:
+    description: "Jira ticket key (e.g. SCCOM-12345). Optional — provides context if available."
+    required: false
+  description:
+    description: "What's broken and where (free text). Used if no ticket."
+    required: false
+  platform:
+    description: "Target platform: android, ios, kmp"
+    default: "android"
+
+steps:
+  - id: locate
+    agent: sherlock
+    description: "Pinpoint the exact code causing the bug"
+    prompt: |
+      {{#if ticket_key}}
+      Fetch context for {{ticket_key}} from any previous investigation or ticket description.
+      {{/if}}
+      {{#if description}}
+      Bug description: {{description}}
+      {{/if}}
+
+      Find the EXACT code location causing this bug. Trace the call chain
+      from symptom to root cause. Output:
+      - Root cause file(s) and line(s)
+      - Why it's broken (the mechanism)
+      - What the fix should do (not the code — just the intent)
+
+      Be surgical. Don't explore the whole feature — just the broken path.
+    auto_continue: true
+
+  - id: fix
+    agent: trinity
+    description: "Implement the minimal fix"
+    prompt: |
+      Using Sherlock's findings from the previous step, implement the fix.
+
+      Rules:
+      - MINIMAL change. Fix the bug, nothing else.
+      - No refactoring. No "while I'm here" improvements.
+      - No new files unless absolutely necessary.
+      - Follow {{platform}} conventions from the codebase.
+      - If the fix touches shared KMP code, note which platforms are affected.
+
+      After fixing, list exactly what you changed and why.
+    depends_on: [locate]
+    auto_continue: true
+
+  - id: verify
+    agent: issues-reviewer
+    description: "Verify the fix is correct and doesn't break anything"
+    prompt: |
+      Review Trinity's fix against Sherlock's root cause analysis.
+
+      Check:
+      1. Does the fix address the ACTUAL root cause (not just the symptom)?
+      2. Could it introduce regressions? Check callers of modified code.
+      3. Is it minimal — no unnecessary changes?
+      4. Does it follow project conventions?
+
+      Verdict: PASS (fix is good) or FAIL (with specific issues to address).
+    depends_on: [fix]
+    auto_continue: false
