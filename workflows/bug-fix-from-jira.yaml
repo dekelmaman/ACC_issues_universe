@@ -1,0 +1,44 @@
+name: bug-fix-from-jira
+description: "End-to-end Jira bug fix — research, reproduce, fix, validate with the same test plan"
+
+params:
+  ticket_key:
+    description: "Jira ticket key (e.g. SCCOM-12345)"
+    required: true
+  platform:
+    description: "Target platform: android, ios, kmp"
+    default: "android"
+
+steps:
+  - id: research
+    uses: ticket-research
+    description: "Phase 1: Deep-dive ticket investigation — fetch, code research, arch review"
+    params:
+      ticket_key: "{{ticket_key}}"
+    auto_continue: false
+
+  - id: reproduce
+    uses: test-and-validate
+    description: "Phase 2: Reproduce the bug — design tests that FAIL on buggy code, PASS after fix"
+    params:
+      goal: "Reproduce bug {{ticket_key}} — design tests that FAIL on the current buggy code and will PASS after the fix is applied"
+      scope: "{{ticket_key}}"
+      platform: "{{platform}}"
+    auto_continue: false
+
+  - id: fix
+    uses: bug-fix
+    description: "Phase 3: Locate root cause, implement minimal fix, review"
+    params:
+      ticket_key: "{{ticket_key}}"
+      platform: "{{platform}}"
+    auto_continue: false
+
+  - id: validate
+    uses: test-and-validate
+    description: "Phase 4: Validate — run the same tests from reproduce phase, should now PASS"
+    params:
+      goal: "Validate fix for {{ticket_key}} — the reproduction tests from Phase 2 should now PASS with the fix applied"
+      scope: "{{ticket_key}}"
+      platform: "{{platform}}"
+    auto_continue: false

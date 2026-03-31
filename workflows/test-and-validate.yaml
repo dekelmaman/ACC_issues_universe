@@ -1,0 +1,105 @@
+name: test-and-validate
+description: "Goal-driven testing — define what to validate, agents find the right way to test it"
+
+params:
+  goal:
+    description: "What should be validated (e.g. 'issue creation saves to server', 'filter by company works')"
+    required: true
+  scope:
+    description: "Where to focus: a ticket key, feature name, or file path"
+    required: false
+  platform:
+    description: "Target platform: android, ios, kmp"
+    default: "android"
+
+steps:
+  - id: discover
+    agent: sherlock
+    description: "Find the testable surface — what code, screens, and data flows are involved"
+    prompt: |
+      Goal to validate: {{goal}}
+      {{#if scope}}Scope hint: {{scope}}{{/if}}
+      Platform: {{platform}}
+
+      Trace the full path this goal touches:
+      - UI entry points (screens, buttons, fields)
+      - Business logic (view models, reducers, use cases)
+      - Data layer (repositories, API calls, local storage)
+      - Existing tests that already cover parts of this
+
+      Output a structured map:
+      ```
+      TESTABLE SURFACE for: {{goal}}
+
+      UI LAYER: [screens/components with file paths]
+      LOGIC LAYER: [view models/reducers with file paths]
+      DATA LAYER: [repos/APIs with file paths]
+
+      EXISTING TEST COVERAGE:
+      - [test file] covers [what aspect]
+
+      GAPS: [what has no test coverage]
+      ```
+    auto_continue: true
+
+  - id: strategize
+    agent: neo
+    description: "Design the test strategy — pick the right test types for maximum confidence"
+    prompt: |
+      Based on Sherlock's testable surface analysis, design a test strategy
+      for validating: {{goal}}
+
+      Choose from these test types (use what fits, skip what doesn't):
+      - **Unit tests**: For isolated logic (view models, mappers, utilities)
+      - **Integration tests**: For data flow (repository -> API, store -> UI state)
+      - **Maestro UI tests**: For end-to-end user flows on device
+      - **Manual verification steps**: For things that can't be automated easily
+
+      For each test, specify:
+      - Test type and WHY this type (not another)
+      - What it validates
+      - Key assertions
+      - File location (follow project conventions)
+
+      Output an ordered test plan. Prioritize: highest-confidence tests first.
+      Don't over-test — if a unit test covers the logic, don't also write
+      a Maestro test for the same thing.
+    depends_on: [discover]
+    auto_continue: false
+
+  - id: implement-tests
+    agent: trinity
+    description: "Write the tests from the strategy"
+    prompt: |
+      Implement the tests from Neo's test strategy.
+
+      Rules:
+      - Follow existing test patterns in the codebase (check nearby test files)
+      - For Maestro tests: use the maestro skill conventions
+      - For unit tests: use the project's test framework (JUnit/XCTest/etc.)
+      - Each test should have a clear name describing what it validates
+      - Run tests after writing them to confirm they pass
+
+      If a test requires test fixtures or mocks that don't exist,
+      create minimal ones — don't over-engineer test infrastructure.
+    depends_on: [strategize]
+    auto_continue: true
+
+  - id: validate
+    agent: issues-reviewer
+    description: "Review test quality and coverage against the original goal"
+    prompt: |
+      Review the implemented tests against:
+      1. The original goal: {{goal}}
+      2. Neo's test strategy
+      3. Sherlock's testable surface
+
+      Check:
+      - Do the tests actually prove the goal works? (not just exercise code)
+      - Are assertions meaningful? (not just "doesn't crash")
+      - Any critical paths left untested?
+      - Test quality: readable, maintainable, not brittle?
+
+      Verdict: PASS or FAIL with specific gaps.
+    depends_on: [implement-tests]
+    auto_continue: false

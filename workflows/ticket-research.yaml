@@ -1,0 +1,148 @@
+name: ticket-research
+description: "Deep-dive ticket investigation — fetch context, parallel code research + architectural review, validated root-cause analysis"
+
+params:
+  ticket_key:
+    description: "Jira ticket key (e.g. SCCOM-12345)"
+    required: true
+
+steps:
+  - id: fetch-ticket
+    agent: shimi-t
+    description: "Fetch the Jira ticket with ALL comments, linked issues, and full context"
+    prompt: |
+      Fetch the Jira ticket {{ticket_key}} and return its FULL details:
+      - Summary, description, acceptance criteria
+      - Current status, assignee, reporter
+      - ALL comments on the ticket (these often contain critical context, reproduction steps, or prior investigation notes)
+      - Any linked issues or blockers
+      - Attachments list (if any)
+
+      Output a structured summary organized as:
+      ```
+      TICKET: {{ticket_key}}
+      Summary: [title]
+      Status: [status] | Assignee: [assignee] | Reporter: [reporter]
+
+      DESCRIPTION:
+      [full description]
+
+      ACCEPTANCE CRITERIA:
+      [if present]
+
+      COMMENTS (chronological):
+      [date] [author]: [content]
+      ...
+
+      LINKED ISSUES:
+      [list with relationship type]
+
+      KEY CONTEXT FOR INVESTIGATION:
+      [extract the most relevant clues from description + comments that should guide the code research]
+      ```
+
+      Do NOT transition the ticket. Read-only phase.
+    auto_continue: true
+
+  - id: investigate
+    agent: ui-investigator
+    collaborators: [sherlock]
+    description: "Deep code research — Lens identifies relevant screens/flows, Sherlock traces the code"
+    prompt: |
+      Using the ticket context from the previous step, investigate the relevant code in the codebase.
+
+      You have a collaborator: **Sherlock** (Codebase Detective).
+      - You own: identifying which screens, components, and user flows are relevant to this ticket
+      - Sherlock owns: searching code, tracing call chains, finding view files, verifying data sources
+
+      ## Investigation Rules
+
+      1. **Ask when unsure.** If you encounter ambiguity — multiple implementations of the same screen,
+         unclear which code path is active, legacy vs. new code — STOP and ask the user before diving deeper.
+         Do NOT guess. A quick question saves hours of wrong-path research.
+
+      2. **Don't deep-dive blindly.** If you're not confident a file or code path is relevant to the ticket,
+         don't spend time analyzing it in detail. Flag it as "potentially relevant, needs confirmation" and move on.
+
+      3. **Follow the evidence.** Start from what the ticket describes (UI element, behavior, error) and trace
+         backwards to the code. Don't start from random files.
+
+      ## Output Format
+
+      ```
+      INVESTIGATION SUMMARY
+      Ticket: {{ticket_key}}
+
+      RELEVANT SCREENS/FLOWS:
+      - [screen name] → [file path]:[line] — [why it's relevant]
+
+      CODE TRACE:
+      - [component/class] at [file]:[line] — [what it does, how it relates to the ticket]
+
+      PROPOSED ROOT CAUSE / AREA OF INTEREST:
+      [your assessment of where the problem likely lives and why]
+
+      CONFIDENCE: [high/medium/low]
+      [if not high, explain what would increase confidence]
+
+      OPEN QUESTIONS:
+      - [anything you need the user to clarify]
+      ```
+    depends_on: [fetch-ticket]
+    auto_continue: false
+
+  - id: investigate-review
+    agent: neo
+    collaborators: [sherlock]
+    description: "Architectural review — Neo validates the investigation against deep app knowledge"
+    prompt: |
+      Using the ticket context from step 1, perform an independent architectural assessment.
+
+      You have a collaborator: **Sherlock** (Codebase Detective).
+      Delegate code-tracing questions to Sherlock when you need to verify assumptions.
+
+      ## Your Role
+
+      You know this app's architecture deeply — which systems are legacy vs. active, how features are
+      structured, and where the boundaries are. Use that knowledge to:
+
+      1. **Identify the correct code area** for this ticket. Apply your architectural knowledge:
+         - PG Tasks (legacy PlanGrid: IssueDetailFragment, ContentProvider) vs. GG Issues (new Compose/Mobius) —
+           we are using the NEW implementation. Don't let research go down the legacy path.
+         - KMP shared layer vs. platform-specific code — know which layer owns the relevant logic.
+         - Recent migrations or refactors that changed where code lives.
+
+      2. **Validate or challenge** the likely investigation direction. If the ticket description could
+         mislead someone into the wrong code path, flag it explicitly.
+
+      3. **Provide architectural context** that a code-level investigation might miss:
+         - Data flow: where does this data come from? (API → Store → ViewModel → UI)
+         - State management: which state machine or store owns this behavior?
+         - Cross-cutting concerns: could this be a shared component issue rather than feature-specific?
+
+      ## Output Format
+
+      ```
+      ARCHITECTURAL ASSESSMENT
+      Ticket: {{ticket_key}}
+
+      LIKELY CODE AREA:
+      - [component/module] — [why, with architectural reasoning]
+
+      ACTIVE vs LEGACY CHECK:
+      - [any legacy/new confusion risks and which path is correct]
+
+      DATA FLOW:
+      [how data flows through the system for this feature area]
+
+      POTENTIAL PITFALLS:
+      - [things a code-level investigation might miss or get wrong]
+
+      MY ASSESSMENT:
+      [where the problem most likely lives and why, from an architectural perspective]
+
+      CONFIDENCE: [high/medium/low]
+      ```
+    depends_on: [fetch-ticket]
+    parallel_with: [investigate]
+    auto_continue: false
