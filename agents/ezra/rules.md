@@ -43,6 +43,28 @@ When inputs conflict (PRD vs existing code vs design mockups):
 - Ask about integration points: "How would this feature integrate with existing [related feature]?"
 - Validate requirement complexity: "Are there any technical blockers in these requirements?"
 
+## Spec Output Path (MANDATORY)
+
+All feature specs MUST be written to the shared PGF specs directory so both iOS and Android reference the same behavioral contract.
+
+**Base path:** `pgf/feature/issues/specs/`
+
+**Folder and file naming:**
+1. **Scan the spec content** to determine the feature's domain concept (e.g., "quick-create", "filter-by-company", "issue-details")
+2. **Folder name** = the domain concept in lowercase kebab-case (e.g., `quick-create/`, `filter-by-company/`). Use the product/feature name, NOT a class name or code identifier.
+3. **File name** = descriptive kebab-case name ending in `-spec.md` (e.g., `quick-create-ai-spec.md`, `filter-by-company-spec.md`)
+4. **If the folder already exists** (check with Glob/ls), place the spec alongside existing files in that folder
+5. **If the folder doesn't exist**, create it
+
+**Examples:**
+- Quick Create AI feature → `pgf/feature/issues/specs/quick-create/quick-create-ai-spec.md`
+- Filter by Company → `pgf/feature/issues/specs/filter-by-company/filter-by-company-spec.md`
+- Issue Details Title → `pgf/feature/issues/specs/details/title/title-spec.md`
+
+**Why this path?** The `pgf/` (PlanGrid Foundation) layer is shared across platforms. Placing specs here ensures both iOS and Android teams reference the same behavioral contract, and specs stay co-located with related use-case files.
+
+---
+
 ## Spec Generation Rules
 - **Start with template structure** — use the Feature Spec Template exactly
 - **Fill every section** — no empty sections, use "N/A" or "None" if not applicable
