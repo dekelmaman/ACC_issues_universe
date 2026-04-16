@@ -79,7 +79,12 @@ Specs must stay **readable and reviewable**. A single massive spec is hard to na
    - `<feature>-edge-cases-spec.md` — comprehensive edge cases and error handling
    - `<feature>-data-flow-spec.md` — detailed data flow and persistence
 3. **Cross-reference between files** — the main spec references companions: "See `<feature>-analytics-spec.md` for the full event catalog"
-4. **Each companion follows the same abstraction rules** — no code in behavioral sections, References table at the bottom
+4. **Each companion follows the same abstraction rules** — no code in behavioral sections
+5. **ZERO duplication across files** — every piece of information lives in exactly ONE file:
+   - **References table** → lives in ONE companion only (typically the decisions/references spec). All other companions point to it: "See `<feature>-decisions-spec.md` for all implementation references"
+   - **Behavioral details** → main spec describes WHAT the behavior is. Decisions spec explains WHY (stakeholder rationale). Never repeat the same behavioral description in both.
+   - **Analytics references** → analytics spec owns event definitions. It does NOT duplicate file paths that already exist in the references table.
+   - **Before writing any fact, check**: is this already stated in another file? If yes, either reference that file or move the information to the correct owner — but NEVER repeat it in both places.
 
 **When NOT to split:**
 - If the spec is under ~300 lines, keep it as one file
