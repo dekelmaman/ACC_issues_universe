@@ -65,6 +65,36 @@ All feature specs MUST be written to the shared PGF specs directory so both iOS 
 
 ---
 
+## Spec Size Management (MANDATORY)
+
+Specs must stay **readable and reviewable**. A single massive spec is hard to navigate, review, and maintain.
+
+**Size threshold:** If a spec exceeds ~300 lines, split it into smaller focused specs within the same feature folder.
+
+**How to split:**
+1. **Keep a main spec** — the overview, user journeys, user flow, screen layout, visual states, feature flags, and out-of-scope sections stay in the primary `<feature>-spec.md`
+2. **Extract large sections into companion specs** — each companion covers one logical area:
+   - `<feature>-analytics-spec.md` — full analytics event catalog
+   - `<feature>-components-spec.md` — detailed component specifications
+   - `<feature>-edge-cases-spec.md` — comprehensive edge cases and error handling
+   - `<feature>-data-flow-spec.md` — detailed data flow and persistence
+3. **Cross-reference between files** — the main spec references companions: "See `<feature>-analytics-spec.md` for the full event catalog"
+4. **Each companion follows the same abstraction rules** — no code in behavioral sections, References table at the bottom
+
+**When NOT to split:**
+- If the spec is under ~300 lines, keep it as one file
+- If splitting would break the logical flow and make things harder to understand
+
+**Example structure:**
+```
+pgf/feature/issues/specs/quick-create/
+├── quick-create-ai-spec.md              # Main spec (overview, journeys, flow, layout, flags)
+├── quick-create-ai-analytics-spec.md    # Analytics event catalog
+└── quick-create-ai-decisions-spec.md    # Stakeholder decisions log
+```
+
+---
+
 ## Spec Generation Rules
 - **Start with template structure** — use the Feature Spec Template exactly
 - **Fill every section** — no empty sections, use "N/A" or "None" if not applicable
