@@ -67,35 +67,32 @@ All feature specs MUST be written to the shared PGF specs directory so both iOS 
 
 ## Spec Size Management (MANDATORY)
 
-Specs must stay **readable and reviewable**. A single massive spec is hard to navigate, review, and maintain.
+Specs must stay **readable and reviewable**.
 
-**Size threshold:** If a spec exceeds ~300 lines, split it into smaller focused specs within the same feature folder.
+**When to split:** Split a section into its own companion spec when it **can stand alone AND serves a different audience or changes independently** from the main behavioral spec. Examples:
+- Analytics event catalog with 10+ events, common parameters, derived fields → different audience (data/analytics team), changes independently → extract to `<feature>-analytics-spec.md`
+- Stakeholder decisions log → historical record, rarely changes → extract to `<feature>-decisions-spec.md`
+- A small analytics table with 3 events → stays inline in the main spec, not worth a separate file
+
+**When NOT to split:** If a section is small, tightly coupled to the main flow, or would lose context when separated — keep it inline. Don't split just because a spec is long. Split because the content has a different owner.
 
 **How to split:**
 1. **Keep a main spec** — the overview, user journeys, user flow, screen layout, visual states, feature flags, and out-of-scope sections stay in the primary `<feature>-spec.md`
-2. **Extract large sections into companion specs** — each companion covers one logical area:
-   - `<feature>-analytics-spec.md` — full analytics event catalog
-   - `<feature>-components-spec.md` — detailed component specifications
-   - `<feature>-edge-cases-spec.md` — comprehensive edge cases and error handling
-   - `<feature>-data-flow-spec.md` — detailed data flow and persistence
+2. **Extract into companion specs** — each companion covers one logical area with its own audience
 3. **Cross-reference between files** — the main spec references companions: "See `<feature>-analytics-spec.md` for the full event catalog"
 4. **Each companion follows the same abstraction rules** — no code in behavioral sections
-5. **ZERO duplication across files** — every piece of information lives in exactly ONE file:
-   - **References table** → lives in ONE companion only (typically the decisions/references spec). All other companions point to it: "See `<feature>-decisions-spec.md` for all implementation references"
-   - **Behavioral details** → main spec describes WHAT the behavior is. Decisions spec explains WHY (stakeholder rationale). Never repeat the same behavioral description in both.
-   - **Analytics references** → analytics spec owns event definitions. It does NOT duplicate file paths that already exist in the references table.
-   - **Before writing any fact, check**: is this already stated in another file? If yes, either reference that file or move the information to the correct owner — but NEVER repeat it in both places.
 
-**When NOT to split:**
-- If the spec is under ~300 lines, keep it as one file
-- If splitting would break the logical flow and make things harder to understand
+**ZERO duplication across files** — every piece of information lives in exactly ONE file:
+- **References table** → lives in ONE companion only (typically the decisions/references spec). All other companions point to it.
+- **Behavioral details** → main spec describes WHAT the behavior is. Decisions spec explains WHY (stakeholder rationale only). Never repeat the same behavioral description in both.
+- **Before writing any fact, check**: is this already stated in another file? If yes, either reference that file or move the information to the correct owner — but NEVER repeat it in both places.
 
 **Example structure:**
 ```
 pgf/feature/issues/specs/quick-create/
 ├── quick-create-ai-spec.md              # Main spec (overview, journeys, flow, layout, flags)
-├── quick-create-ai-analytics-spec.md    # Analytics event catalog
-└── quick-create-ai-decisions-spec.md    # Stakeholder decisions log
+├── quick-create-ai-analytics-spec.md    # Analytics event catalog (large, different audience)
+└── quick-create-ai-decisions-spec.md    # Stakeholder decisions + references (historical record)
 ```
 
 ---
