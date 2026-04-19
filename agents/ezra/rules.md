@@ -65,6 +65,69 @@ All feature specs MUST be written to the shared PGF specs directory so both iOS 
 
 ---
 
+## Spec Size Management (MANDATORY)
+
+Specs must stay **readable and reviewable**.
+
+**When to split:** Split a section into its own companion spec when it **can stand alone AND serves a different audience or changes independently** from the main behavioral spec. Examples:
+- Analytics event catalog with 10+ events, common parameters, derived fields → different audience (data/analytics team), changes independently → extract to `<feature>-analytics-spec.md`
+- Stakeholder decisions log → historical record, rarely changes → extract to `<feature>-decisions-spec.md`
+- A small analytics table with 3 events → stays inline in the main spec, not worth a separate file
+
+**When NOT to split:** If a section is small, tightly coupled to the main flow, or would lose context when separated — keep it inline. Don't split just because a spec is long. Split because the content has a different owner.
+
+**How to split:**
+1. **Keep a main spec** — the overview, user journeys, user flow, screen layout, visual states, feature flags, and out-of-scope sections stay in the primary `<feature>-spec.md`
+2. **Extract into companion specs** — each companion covers one logical area with its own audience
+3. **Cross-reference between files** — the main spec references companions: "See `<feature>-analytics-spec.md` for the full event catalog"
+4. **Each companion follows the same abstraction rules** — no code in behavioral sections
+
+**ZERO duplication across files** — every piece of information lives in exactly ONE file:
+- **References table** → lives in ONE companion only (typically the decisions/references spec). All other companions point to it.
+- **Behavioral details** → main spec describes WHAT the behavior is. Decisions spec explains WHY (stakeholder rationale only). Never repeat the same behavioral description in both.
+- **Before writing any fact, check**: is this already stated in another file? If yes, either reference that file or move the information to the correct owner — but NEVER repeat it in both places.
+
+**Example structure:**
+```
+pgf/feature/issues/specs/quick-create/
+├── quick-create-spec.md                  # Base (v1.0) — shared foundation + base analytics
+├── quick-create-without-ai-spec.md       # Phase 1 (v1.0) — delta + Phase 1 analytics delta
+├── quick-create-with-ai-spec.md          # Phase 2 (v1.0) — delta + Phase 2 analytics delta
+└── quick-create-decisions-spec.md        # Stakeholder decisions + references (optional)
+```
+
+---
+
+## Phase-Based Delta Structure (MANDATORY)
+
+Specs follow a **base + phases** model where each phase contains only the delta (what's new or changed), not a complete repeat of all functionality.
+
+**Structure:**
+
+| File | Purpose | Content |
+|------|---------|---------|
+| `<feature>-spec.md` (v1.0) | Base spec | Shared foundation: overview, goals, shared user journeys, screen layout, visual states, components, feature flags, accessibility, security, out-of-scope. **Shared analytics section:** event naming convention, common parameters. **Version header required.** |
+| `<feature>-<phase>-spec.md` (v1.0) | Phase spec | **DELTA ONLY:** phase-specific user journeys, layouts, states, edge cases, data flow. **Analytics delta:** new events and parameters specific to this phase. **Header must say "This spec extends `<feature>-spec.md`" and include version.** Reference base instead of repeating. |
+| `<feature>-analytics-spec.md` | Analytics companion (optional) | Use ONLY if total analytics across base + all phases becomes too large. When used, mirror the phase structure with base section + phase-specific sections. Otherwise, keep analytics inline with each spec. |
+| `<feature>-decisions-spec.md` | Decisions companion (optional) | Stakeholder decisions (rationale only) and implementation references table (file paths, code IDs, endpoints, flags). |
+
+**Version Management & Bumping (MANDATORY):**
+- Every spec file has a version in the header (e.g., `(v1.0)`, `(v2.0)`)
+- When updating any existing spec, **ALWAYS ASK THE USER** if the spec version should be bumped
+- **Bump rules:**
+  - **Base spec:** Bump version if shared sections (overview, journeys, layouts, states, components) change
+  - **Phase spec:** Bump version if phase-specific sections change
+  - **Related specs:** When one spec updates, ask user if related specs (base + other phases) need version bumps due to cross-dependencies
+- Example: "Phase 2 analytics changed. Should we bump Phase 2 (v1.0 → v1.1) and base (v1.0 → v1.1) to show the dependency?"
+- Phase specs reference the base version they depend on: "Extends base v1.0"
+
+**Cross-reference format:**
+- Base spec: "See `<feature>-decisions-spec.md` for implementation references." (if used)
+- Phase spec header: "This spec extends `<feature>-spec.md` (base v1.0). See `<feature>-decisions-spec.md` for implementation references." (if used)
+- If `<feature>-analytics-spec.md` exists: "See `<feature>-analytics-spec.md` for complete analytics across all phases."
+
+---
+
 ## Spec Generation Rules
 - **Start with template structure** — use the Feature Spec Template exactly
 - **Fill every section** — no empty sections, use "N/A" or "None" if not applicable

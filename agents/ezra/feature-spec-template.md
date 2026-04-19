@@ -2,8 +2,40 @@
 
 This is the mandatory template that Ezra must use for all feature specifications. Every spec must follow this exact structure with all sections included.
 
+## Usage
+
+**For Base Specs:** Use this template for the shared foundation spec.
+- Header: `# [Feature Name] - Feature Spec (v1.0)`
+- Include shared user journeys, layouts, components, and analytics (naming conventions + common parameters)
+
+**For Phase Specs:** Use this template for each phase, but:
+- Header: `# [Feature Name] - [Phase Name] - Feature Spec (v1.0)` (e.g., "v2.0" if updating)
+- Start with: "This spec extends `<feature>-spec.md` (base v[version])"
+- **DELTA ONLY:** Include only sections that are new or changed in this phase
+- Reference base spec instead of repeating shared sections
+- Include phase-specific analytics (new/modified events for this phase only)
+
+## Version Bumping Protocol
+
+When updating any spec, **ALWAYS ASK THE USER:**
+- "Should we bump [spec name] from v1.0 to v1.1?"
+- "Should we also bump the base/related specs due to cross-dependencies?"
+- Document the rationale: "Bumping because [shared sections changed / phase-specific sections changed]"
+
+This ensures version numbers stay synchronized and readers understand what changed.
+
+---
+
 ```markdown
-# [Feature Name] - Feature Spec
+# [Feature Name] - Feature Spec (v1.0)
+
+**For phase specs:** This spec extends `<feature>-spec.md` (base v1.0)
+
+## Overview
+Brief description of what the feature does and its purpose.
+Include any important scope limitations (e.g., "covers non-AI mode only").
+
+---
 
 ## Overview
 Brief description of what the feature does and its purpose.
