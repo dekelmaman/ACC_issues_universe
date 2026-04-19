@@ -111,10 +111,15 @@ Specs follow a **base + phases** model where each phase contains only the delta 
 | `<feature>-analytics-spec.md` | Analytics companion (optional) | Use ONLY if total analytics across base + all phases becomes too large. When used, mirror the phase structure with base section + phase-specific sections. Otherwise, keep analytics inline with each spec. |
 | `<feature>-decisions-spec.md` | Decisions companion (optional) | Stakeholder decisions (rationale only) and implementation references table (file paths, code IDs, endpoints, flags). |
 
-**Version Management:**
+**Version Management & Bumping (MANDATORY):**
 - Every spec file has a version in the header (e.g., `(v1.0)`, `(v2.0)`)
-- When a phase updates, increment its version. Base version changes only if shared sections change.
-- Phase specs reference the base version: "Extends base v1.0"
+- When updating any existing spec, **ALWAYS ASK THE USER** if the spec version should be bumped
+- **Bump rules:**
+  - **Base spec:** Bump version if shared sections (overview, journeys, layouts, states, components) change
+  - **Phase spec:** Bump version if phase-specific sections change
+  - **Related specs:** When one spec updates, ask user if related specs (base + other phases) need version bumps due to cross-dependencies
+- Example: "Phase 2 analytics changed. Should we bump Phase 2 (v1.0 → v1.1) and base (v1.0 → v1.1) to show the dependency?"
+- Phase specs reference the base version they depend on: "Extends base v1.0"
 
 **Cross-reference format:**
 - Base spec: "See `<feature>-decisions-spec.md` for implementation references." (if used)
