@@ -90,10 +90,36 @@ Specs must stay **readable and reviewable**.
 **Example structure:**
 ```
 pgf/feature/issues/specs/quick-create/
-├── quick-create-ai-spec.md              # Main spec (overview, journeys, flow, layout, flags)
-├── quick-create-ai-analytics-spec.md    # Analytics event catalog (large, different audience)
-└── quick-create-ai-decisions-spec.md    # Stakeholder decisions + references (historical record)
+├── quick-create-spec.md                  # Base (v1.0) — shared foundation + base analytics
+├── quick-create-without-ai-spec.md       # Phase 1 (v1.0) — delta + Phase 1 analytics delta
+├── quick-create-with-ai-spec.md          # Phase 2 (v1.0) — delta + Phase 2 analytics delta
+└── quick-create-decisions-spec.md        # Stakeholder decisions + references (optional)
 ```
+
+---
+
+## Phase-Based Delta Structure (MANDATORY)
+
+Specs follow a **base + phases** model where each phase contains only the delta (what's new or changed), not a complete repeat of all functionality.
+
+**Structure:**
+
+| File | Purpose | Content |
+|------|---------|---------|
+| `<feature>-spec.md` (v1.0) | Base spec | Shared foundation: overview, goals, shared user journeys, screen layout, visual states, components, feature flags, accessibility, security, out-of-scope. **Shared analytics section:** event naming convention, common parameters. **Version header required.** |
+| `<feature>-<phase>-spec.md` (v1.0) | Phase spec | **DELTA ONLY:** phase-specific user journeys, layouts, states, edge cases, data flow. **Analytics delta:** new events and parameters specific to this phase. **Header must say "This spec extends `<feature>-spec.md`" and include version.** Reference base instead of repeating. |
+| `<feature>-analytics-spec.md` | Analytics companion (optional) | Use ONLY if total analytics across base + all phases becomes too large. When used, mirror the phase structure with base section + phase-specific sections. Otherwise, keep analytics inline with each spec. |
+| `<feature>-decisions-spec.md` | Decisions companion (optional) | Stakeholder decisions (rationale only) and implementation references table (file paths, code IDs, endpoints, flags). |
+
+**Version Management:**
+- Every spec file has a version in the header (e.g., `(v1.0)`, `(v2.0)`)
+- When a phase updates, increment its version. Base version changes only if shared sections change.
+- Phase specs reference the base version: "Extends base v1.0"
+
+**Cross-reference format:**
+- Base spec: "See `<feature>-decisions-spec.md` for implementation references." (if used)
+- Phase spec header: "This spec extends `<feature>-spec.md` (base v1.0). See `<feature>-decisions-spec.md` for implementation references." (if used)
+- If `<feature>-analytics-spec.md` exists: "See `<feature>-analytics-spec.md` for complete analytics across all phases."
 
 ---
 
