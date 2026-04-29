@@ -1,0 +1,109 @@
+name: adr-forge
+description: "Generate Architecture Decision Records per platform from a product spec and codebase research"
+
+params:
+  spec_path:
+    description: "Path to the feature spec"
+    required: true
+  feature:
+    description: "Feature name for output directory naming"
+    required: true
+  platforms:
+    description: "Comma-separated list of platforms to generate ADRs for (e.g., 'android,pgf' or 'ios')"
+    required: true
+  kb_path:
+    description: "Knowledge-base path for persistent storage"
+    required: false
+
+steps:
+  - id: generate-adrs
+    agent: neo
+    collaborators: [sherlock]
+    description: "Neo generates one ADR per platform, consulting Sherlock for code verification"
+    prompt: |
+      Read:
+      - Feature spec: {{spec_path}}
+      - Codebase research: .claude/specs/{{feature}}/research.md
+      - Target platforms: {{platforms}}
+
+      ## Your Mission
+
+      For EACH platform in [{{platforms}}], generate an Architecture Decision Record.
+      Save each to BOTH locations:
+      1. `.claude/specs/{{feature}}/adr-{platform}.md` (working copy)
+      {{#if kb_path}}
+      2. `{{kb_path}}/adr-{platform}.md` (persistent copy — knowledge base)
+      {{/if}}
+
+      ## Skill Loading
+
+      Load platform-appropriate skills before designing:
+      - **android**: Use mobius-mvi skill (Mobius loops, Updater/Processor patterns),
+        jetpack-compose skill (Compose state, Modifier chains, lazy lists)
+      - **ios**: Use tca/composable-architecture skill (Reducer, Store, Effect patterns),
+        swiftui/modern-patterns skill, AlloyUI skill
+      - **pgf**: Use mobius-mvi skill for shared model patterns (no UI code)
+
+      ## ADR Structure (MANDATORY for each platform)
+
+      ```markdown
+      # ADR: {{feature}} — {platform}
+
+      ## Context
+      [What the spec requires, summarized for this platform's perspective]
+
+      ## Decisions
+
+      ### Decision 1: [Pattern/Approach choice]
+      **Choice**: [what we're doing]
+      **Rationale**: [why, referencing research.md findings]
+
+      ### Alternatives Considered
+      | Option | Pros | Cons | Decision |
+      |--------|------|------|----------|
+      | [option A] | [pros] | [cons] | **CHOSEN** / Rejected |
+      | [option B] | [pros] | [cons] | Rejected |
+
+      ## Requirement Mapping
+
+      Map EVERY spec requirement to a platform implementation. This table is the
+      oracle that drift checks will verify against.
+
+      | ID | Spec Requirement | Platform Implementation | EARS Acceptance Criteria |
+      |----|-----------------|------------------------|------------------------|
+      | SR-1 | [from spec] | [platform-specific approach] | WHEN [condition], THE system SHALL [behavior] |
+      | SR-2 | ... | ... | WHERE [state], THE [element] SHALL [property] |
+
+      EARS notation rules:
+      - WHEN = event trigger (user action, data arrival)
+      - WHERE = state condition (screen is visible, data is loaded)
+      - WHILE = ongoing condition (during loading, while editing)
+      - SHALL = mandatory behavior
+      - SHOULD = recommended behavior
+
+      ## Component Plan
+
+      Use delta markers for every file change:
+      | Action | File | Description |
+      |--------|------|-------------|
+      | CREATE | [new file path] | [what it contains] |
+      | MODIFY | [existing file path] | [what changes, cite research.md evidence] |
+
+      Delegate to Sherlock to verify that MODIFY targets actually exist at the
+      stated paths. Do NOT guess file locations.
+
+      ## Dependencies
+      - [what must exist before this platform's work can begin]
+      - [if pgf ADR exists, reference shared models/use-cases it provides]
+      ```
+
+      ## Cross-Platform Rules
+
+      - If {{platforms}} includes "pgf" AND a platform (android/ios):
+        The pgf ADR defines shared contracts (models, use-cases, API).
+        The platform ADR references those contracts — no duplication.
+      - Each ADR is self-contained: a developer reading ONLY that ADR should
+        understand what to build for that platform.
+      - Requirement IDs (SR-1, SR-2...) must be consistent across all ADRs
+        for the same spec — same ID = same spec requirement.
+    auto_continue: false

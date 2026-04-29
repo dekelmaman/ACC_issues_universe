@@ -1,0 +1,141 @@
+name: spec-review
+description: "Final spec compliance audit — verify implementation matches the product spec and ADR decisions"
+
+params:
+  spec_path:
+    description: "Path to the feature spec (source of truth)"
+    required: true
+  feature:
+    description: "Feature name for locating work artifacts"
+    required: true
+  platform:
+    description: "Platform to review (android, ios, or pgf)"
+    required: true
+  base_branch:
+    description: "Branch to diff against (typically dev)"
+    default: "dev"
+  kb_path:
+    description: "Knowledge-base path for persistent storage"
+    required: false
+
+steps:
+  - id: spec-audit
+    agent: issues-reviewer
+    description: "Rev audits ALL code changes against the spec requirement mapping"
+    prompt: |
+      ## Mode: Final Spec Compliance Audit
+
+      This is NOT a standard code review. You are auditing whether the implementation
+      fulfills the product spec. Code quality is secondary — spec compliance is primary.
+
+      Read:
+      - Feature spec: {{spec_path}}
+      - Platform ADR: .claude/specs/{{feature}}/adr-{{platform}}.md
+      - Tasks: .claude/specs/{{feature}}/tasks-{{platform}}.md
+      - Drift log (if exists): .claude/specs/{{feature}}/drift-log.md
+      - Full diff: `git diff {{base_branch}}...HEAD`
+
+      ## Audit Process
+
+      ### Step 1: Build the Full Compliance Matrix
+
+      For EVERY row in the ADR's Requirement Mapping table:
+
+      | ID | Spec Requirement | ADR Decision | Code Evidence | Status |
+      |----|-----------------|-------------|---------------|--------|
+      | SR-1 | [from ADR] | [from ADR] | [file:line or "NOT FOUND"] | PASS/FAIL/PARTIAL |
+
+      Rules:
+      - **PASS**: Code implements the ADR decision correctly. Cite file:line as evidence.
+      - **PARTIAL**: Code partially implements. Describe what's missing.
+      - **FAIL**: Code contradicts the ADR decision, or requirement has no implementation.
+
+      ### Step 2: Check for Untracked Changes
+
+      Look at the full git diff for changes that DON'T map to any spec requirement:
+      - New files not in the ADR Component Plan
+      - Modified files not mentioned in any task
+      - These aren't necessarily bad — but they need justification
+
+      ### Step 3: Verify Task Completion
+
+      Cross-reference tasks-{{platform}}.md:
+      - All tasks should be marked [x]
+      - Any unchecked tasks = gap in implementation
+
+      ### Step 4: Quality Check (Platform-Specific)
+
+      {{platform}} == "android":
+        - Mobius patterns: Updater is pure, effects in Processors
+        - Compose: state hoisting, proper Modifier chains, LazyColumn keys
+        - AlloyCompose: using design system components, not raw Material3
+        - Kotlin: no force casts, sealed classes for state, no GlobalScope
+
+      {{platform}} == "ios":
+        - TCA patterns: correct reducer composition, effect handling
+        - SwiftUI: proper state management, no UIKit leaks
+        - AlloyUI: design system compliance
+        - Swift: memory safety, async patterns
+
+      {{platform}} == "pgf":
+        - Platform-agnostic: no UI code, no platform imports
+        - Model correctness: sealed classes, proper nullability
+        - API contracts: consistent with existing patterns
+
+      ## Output Format
+
+      ```
+      # Spec Compliance Audit: {{feature}} — {{platform}}
+
+      ## Compliance Matrix
+      [full table from Step 1]
+
+      ## Summary
+      - Total requirements: [N]
+      - PASS: [N]
+      - PARTIAL: [N] (details below)
+      - FAIL: [N] (details below)
+
+      ## Untracked Changes
+      [list from Step 2, or "None"]
+
+      ## Task Completion
+      - Completed: [N] / [total]
+      - Gaps: [list unchecked tasks, or "None"]
+
+      ## Code Quality Findings
+      [categorized as Blocker / Suggestion / Nit]
+
+      ## Verdict: SPEC_FORGE_PASS | SPEC_FORGE_FAIL
+
+      ## If FAIL — Remaining Work
+      [list of specific fix tasks needed, in the same Do/Files/Verify format]
+      ```
+
+      Save the audit report to BOTH locations:
+      1. `.claude/specs/{{feature}}/review-{{platform}}.md` (working copy)
+      {{#if kb_path}}
+      2. `{{kb_path}}/review-{{platform}}.md` (persistent copy — knowledge base)
+      {{/if}}
+    auto_continue: true
+
+  - id: alloy-audit
+    agent: alloy-auditor
+    description: "Design system compliance check on all new/modified UI files"
+    prompt: |
+      Audit AlloyUI / AlloyCompose compliance for the {{feature}} implementation.
+
+      Focus on files changed in the {{platform}} implementation:
+      - Run `git diff {{base_branch}}...HEAD --name-only` to get changed files
+      - Filter to UI files only (.kt Compose files for Android, .swift SwiftUI files for iOS)
+      - Skip pgf/ files (no UI in shared layer)
+
+      Check:
+      - Using AlloyUI/AlloyCompose components where available (not raw Material3 or native SwiftUI)
+      - Design tokens from AlloyTheme (not hardcoded colors, dimensions, typography)
+      - Accessibility: contentDescription on interactive elements, proper semantics
+      - Consistent with existing AlloyUI patterns in the codebase
+
+      Output: ALLOY_PASS or ALLOY_FAIL with specific violations and suggested fixes.
+    depends_on: [spec-audit]
+    auto_continue: true

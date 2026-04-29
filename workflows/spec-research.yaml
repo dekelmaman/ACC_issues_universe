@@ -1,0 +1,108 @@
+name: spec-research
+description: "Deep codebase research driven by a product spec — find existing code, reusable patterns, risks, and build commands"
+
+params:
+  spec_path:
+    description: "Path to the feature spec (e.g., pgf/feature/issues/specs/quick-create/quick-create-spec.md)"
+    required: true
+  feature:
+    description: "Feature name for output directory naming"
+    required: true
+  kb_path:
+    description: "Knowledge-base path for persistent storage (e.g., ~/.rick/universes/ACC_issues_universe/knowledge-base/build-mobile/quick-create)"
+    required: false
+
+steps:
+  - id: investigate
+    agent: sherlock
+    collaborators: [neo]
+    description: "Sherlock investigates the codebase guided by the spec. Neo provides architectural context."
+    prompt: |
+      Read the feature spec at {{spec_path}}.
+
+      ## Your Mission
+
+      Research the codebase to answer these questions — the answers feed into
+      architecture decisions and task planning for implementation.
+
+      ### 1. Existing Code Overlap
+      - What code already implements parts of this feature?
+      - What components/composables/reducers exist that this feature will extend?
+      - Are there similar features whose patterns we should follow?
+
+      ### 2. Reusable Components
+      - What shared components exist in AlloyCompose / AlloyUI?
+      - What PGFoundation utilities, models, or use-cases can be reused?
+      - What existing test fixtures or helpers are available?
+
+      ### 3. Platform Analysis
+      - Does this feature need pgf/ (shared layer) changes?
+        Ask Neo: "Given these spec requirements, do we need new models, use-cases,
+        or API contracts in pgf/, or can the platform layer handle everything?"
+      - What modules/gradle targets are involved?
+      - What's the dependency chain? (e.g., :pgf:issues -> :android:issues -> :android:app)
+
+      ### 4. Build/Test/Lint Commands
+      Discover the ACTUAL commands for each relevant module:
+      - Build command (assembleDebug, etc.)
+      - Unit test command
+      - Lint command
+      - Any integration/E2E test commands
+
+      ### 5. Risks & Constraints
+      - Legacy code paths to avoid (PG Tasks vs GG Issues, old XML vs new Compose)
+      - Recent migrations that changed where code lives
+      - Known issues or tech debt in this area
+      - Feature flags that gate related functionality
+
+      ## Prior Knowledge Check
+
+      Before researching, check if previous research exists:
+      {{#if kb_path}}
+      - Check `{{kb_path}}/research.md` — if it exists, read it first.
+        Prior research may save time, but RE-VERIFY findings against current code.
+      {{/if}}
+
+      ## Output
+
+      Save to BOTH locations:
+      1. `.claude/specs/{{feature}}/research.md` (working copy — fast local access)
+      {{#if kb_path}}
+      2. `{{kb_path}}/research.md` (persistent copy — shared with team)
+      {{/if}}
+
+      Use this structure:
+
+      ```markdown
+      # Research: {{feature}}
+
+      ## Spec Summary
+      - Feature: [name]
+      - Key requirements: [bullet list extracted from spec]
+
+      ## Existing Code Analysis
+      | Area | File/Component | Relevance |
+      |------|---------------|-----------|
+      | [area] | [file:line] | [how it relates] |
+
+      ## Reusable Components
+      - [component] at [path] — [what it provides]
+
+      ## Platform Analysis
+      - PGF changes needed: YES/NO (reason)
+      - Modules involved: [list with gradle paths]
+      - Dependency chain: [module -> module -> module]
+
+      ## Build/Test/Lint Commands
+      | Module | Build | Test | Lint |
+      |--------|-------|------|------|
+      | [module] | [cmd] | [cmd] | [cmd] |
+
+      ## Risks & Constraints
+      - [risk]: [explanation and mitigation]
+
+      ## Confidence
+      - Overall: [high/medium/low]
+      - Open questions for user: [list, if any]
+      ```
+    auto_continue: true

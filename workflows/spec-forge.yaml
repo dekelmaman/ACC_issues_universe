@@ -1,0 +1,275 @@
+name: spec-forge
+description: "Implement a feature from a product spec with continuous verification — composed from smaller workflows"
+
+params:
+  feature:
+    description: "Feature name to find spec (e.g., 'quick-create', 'filter-by-company')"
+    required: true
+  platform:
+    description: "Target platform: android, ios, or 'ask' for interactive selection"
+    default: "ask"
+  ticket_key:
+    description: "Jira ticket key (optional — enables Jira transitions)"
+    required: false
+  drift_frequency:
+    description: "Drift check cadence: 'every-task', 'every-3', 'per-phase'"
+    default: "every-3"
+
+env:
+  # Knowledge-base path resolution:
+  # 1. Detect project name from git remote (e.g., plangrid/build-mobile -> build-mobile)
+  # 2. Build KB path: {UNIVERSE_PATH}/knowledge-base/{project}/{feature}/
+  # See rules/knowledge-base.md for full convention.
+  kb_project: "$(git remote get-url origin 2>/dev/null | sed 's|.*/||;s|\\.git$||' || basename $(pwd))"
+  kb_path: "~/.rick/universes/ACC_issues_universe/knowledge-base/{{kb_project}}/{{feature}}"
+
+steps:
+  # ──────────────────────────────────────────────────────────
+  # Phase 0: Resolve knowledge-base path + Find the spec
+  # ──────────────────────────────────────────────────────────
+  - id: resolve-kb
+    agent: sherlock
+    description: "Resolve the knowledge-base path from git remote and create feature directory"
+    prompt: |
+      Resolve the knowledge-base path for this workflow run.
+
+      1. Get the project name from git remote:
+         ```bash
+         git remote get-url origin | sed 's|.*/||;s|\.git$||'
+         ```
+         (fallback to current directory basename if no remote)
+
+      2. Build the knowledge-base path:
+         `~/.rick/universes/ACC_issues_universe/knowledge-base/{project}/{{feature}}/`
+
+      3. Create the directory if it doesn't exist:
+         ```bash
+         mkdir -p {resolved_path}
+         ```
+
+      4. Check if previous artifacts exist (from prior runs):
+         - research.md? -> "Prior research available"
+         - adr-*.md? -> "Prior ADRs available"
+         - drift-log.md? -> "Prior drift history available"
+
+      Output:
+      ```
+      KB_PATH: {full resolved path}
+      KB_PROJECT: {project name}
+      PRIOR_ARTIFACTS: {list of existing files, or "none"}
+      ```
+    auto_continue: true
+
+  - id: fetch-spec
+    uses: spec-fetch
+    description: "Ezra locates and validates the feature spec from pgf/feature/issues/specs/"
+    params:
+      feature: "{{feature}}"
+    depends_on: [resolve-kb]
+    auto_continue: true
+
+  # ──────────────────────────────────────────────────────────
+  # Phase 1: Research the codebase
+  # ──────────────────────────────────────────────────────────
+  - id: research
+    uses: spec-research
+    description: "Sherlock + Neo investigate the codebase guided by the spec"
+    params:
+      spec_path: "{{step_outputs.fetch-spec.spec_path}}"
+      feature: "{{feature}}"
+      kb_path: "{{step_outputs.resolve-kb.kb_path}}"
+    auto_continue: true
+
+  # ──────────────────────────────────────────────────────────
+  # Phase 2: Platform selection (interactive — stays inline)
+  # ──────────────────────────────────────────────────────────
+  - id: platform-select
+    agent: neo
+    collaborators: [sherlock]
+    description: "Determine which platforms are needed and let user confirm"
+    skip_if: "{{#unless (eq platform 'ask')}}true{{/unless}}"
+    prompt: |
+      Read:
+      - Feature spec: {{step_outputs.fetch-spec.spec_path}}
+      - Research: .claude/specs/{{feature}}/research.md
+
+      ## Determine Required Platforms
+
+      Analyze the spec requirements and research findings to determine:
+
+      1. **Does this feature need pgf/ changes?**
+         - New models, use-cases, API contracts -> YES
+         - Only UI/presentation changes -> NO
+         - If research.md says "PGF changes needed: YES" -> YES
+
+      2. **Which platform(s) does the user want?**
+         Present a clear summary:
+         ```
+         Feature: [name]
+         PGF needed: YES/NO (reason: [brief])
+
+         Which platform should I forge this for?
+         1. Android
+         2. iOS
+         3. Both (sequential — Android first, then iOS)
+         ```
+
+         Wait for user input.
+
+      3. **Build the final platforms list**:
+         - If user picks "Android" and pgf needed: platforms = ["pgf", "android"]
+         - If user picks "Android" and pgf NOT needed: platforms = ["android"]
+         - If user picks "iOS" and pgf needed: platforms = ["pgf", "ios"]
+         - If user picks "Both" and pgf needed: platforms = ["pgf", "android", "ios"]
+         - pgf ALWAYS comes first when present
+
+      Output the platforms list as: `PLATFORMS: pgf,android` (comma-separated, ordered)
+    depends_on: [research]
+    auto_continue: false
+
+  # ──────────────────────────────────────────────────────────
+  # Phase 2b: Resolve platform when pre-selected (not 'ask')
+  # ──────────────────────────────────────────────────────────
+  - id: platform-resolve
+    agent: neo
+    collaborators: [sherlock]
+    description: "When platform was pre-selected, just determine if pgf is also needed"
+    skip_if: "{{#if (eq platform 'ask')}}true{{/if}}"
+    prompt: |
+      Read:
+      - Feature spec: {{step_outputs.fetch-spec.spec_path}}
+      - Research: .claude/specs/{{feature}}/research.md
+      - User selected platform: {{platform}}
+
+      Determine if pgf/ changes are also needed for this feature.
+      If YES: output `PLATFORMS: pgf,{{platform}}`
+      If NO: output `PLATFORMS: {{platform}}`
+    depends_on: [research]
+    auto_continue: true
+
+  # ──────────────────────────────────────────────────────────
+  # Phase 3: Generate ADRs
+  # ──────────────────────────────────────────────────────────
+  - id: forge-adrs
+    uses: adr-forge
+    description: "Neo generates Architecture Decision Records per required platform"
+    params:
+      spec_path: "{{step_outputs.fetch-spec.spec_path}}"
+      feature: "{{feature}}"
+      platforms: "{{step_outputs.platform-select.platforms || step_outputs.platform-resolve.platforms}}"
+      kb_path: "{{step_outputs.resolve-kb.kb_path}}"
+    depends_on: [platform-select, platform-resolve]
+    auto_continue: false
+
+  # ──────────────────────────────────────────────────────────
+  # Phase 4: ADR approval gate (interactive — stays inline)
+  # ──────────────────────────────────────────────────────────
+  - id: adr-approval
+    agent: neo
+    description: "Present ADR summary for user approval before implementation"
+    prompt: |
+      Read the generated ADRs at .claude/specs/{{feature}}/adr-*.md
+
+      Present a concise summary to the user:
+
+      ```
+      ADRs generated for {{feature}}:
+
+      [For each platform ADR]:
+      ## {Platform}
+      - Key decisions: [2-3 bullet points of major architectural choices]
+      - Components: [CREATE count] new, [MODIFY count] existing
+      - Requirements mapped: [N] / [total from spec]
+
+      Ready to implement? [y/n/edit]
+      - y = proceed to implementation
+      - n = stop workflow
+      - edit = tell me what to change in the ADR
+      ```
+
+      If user says "edit" or provides feedback:
+      1. Apply the requested changes to the relevant ADR file(s)
+      2. Re-present the summary
+      3. Wait for approval again
+
+      Only output `ADR_APPROVED` when user explicitly approves.
+    depends_on: [forge-adrs]
+    auto_continue: false
+
+  # ──────────────────────────────────────────────────────────
+  # Phase 5: Implement each platform (pgf first, then target)
+  #
+  # NOTE: If multiple platforms, this step runs sequentially
+  # for each platform. pgf always goes first because platform
+  # code depends on shared models/use-cases.
+  #
+  # The orchestrator (Rick) iterates over the platforms list
+  # and invokes spec-implement once per platform.
+  # ──────────────────────────────────────────────────────────
+  - id: implement-pgf
+    uses: spec-implement
+    description: "Implement PGF shared layer (only if pgf is in the platforms list)"
+    skip_if: "{{#unless (contains platforms 'pgf')}}true{{/unless}}"
+    params:
+      spec_path: "{{step_outputs.fetch-spec.spec_path}}"
+      feature: "{{feature}}"
+      platform: "pgf"
+      drift_frequency: "{{drift_frequency}}"
+      kb_path: "{{step_outputs.resolve-kb.kb_path}}"
+    depends_on: [adr-approval]
+    auto_continue: true
+
+  - id: implement-platform
+    uses: spec-implement
+    description: "Implement the target platform (android or ios)"
+    params:
+      spec_path: "{{step_outputs.fetch-spec.spec_path}}"
+      feature: "{{feature}}"
+      platform: "{{platform}}"
+      drift_frequency: "{{drift_frequency}}"
+      kb_path: "{{step_outputs.resolve-kb.kb_path}}"
+    depends_on: [implement-pgf, adr-approval]
+    auto_continue: false
+
+  # ──────────────────────────────────────────────────────────
+  # Phase 6: Final review
+  # ──────────────────────────────────────────────────────────
+  - id: review
+    uses: spec-review
+    description: "Rev audits the full implementation against the spec + Alloy compliance check"
+    params:
+      spec_path: "{{step_outputs.fetch-spec.spec_path}}"
+      feature: "{{feature}}"
+      platform: "{{platform}}"
+      kb_path: "{{step_outputs.resolve-kb.kb_path}}"
+    depends_on: [implement-platform]
+    auto_continue: true
+
+  # ──────────────────────────────────────────────────────────
+  # Phase 7: Jira update (optional)
+  # ──────────────────────────────────────────────────────────
+  - id: update-ticket
+    agent: shimi-t
+    description: "Transition Jira ticket to In Review with implementation summary"
+    skip_if: "{{#unless ticket_key}}true{{/unless}}"
+    prompt: |
+      Transition ticket {{ticket_key}} to "In Review".
+
+      1. Fetch current ticket status
+      2. Get available transitions
+      3. Execute the "In Review" transition
+      4. Post a comment summarizing the implementation:
+
+         ```
+         Spec-forge implementation complete for {{feature}} on {{platform}}.
+
+         Spec: {{step_outputs.fetch-spec.spec_path}}
+         ADR: .claude/specs/{{feature}}/adr-{{platform}}.md
+
+         Spec compliance: [PASS/FAIL from review step]
+         AlloyUI compliance: [PASS/FAIL from review step]
+
+         Ready for human code review.
+         ```
+    depends_on: [review]
+    auto_continue: false

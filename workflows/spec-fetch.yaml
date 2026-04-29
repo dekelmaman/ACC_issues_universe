@@ -1,0 +1,62 @@
+name: spec-fetch
+description: "Locate and validate a product spec from pgf/feature/issues/specs/"
+
+params:
+  feature:
+    description: "Feature name to search for (e.g., 'quick-create', 'filter-by-company')"
+    required: true
+
+steps:
+  - id: locate-spec
+    agent: ezra
+    description: "Find and validate the feature spec in the project spec directory"
+    prompt: |
+      Find the product spec for feature "{{feature}}" in the project.
+
+      ## Search Protocol
+
+      1. Search `pgf/feature/issues/specs/` for folders matching "{{feature}}"
+         - Use fuzzy matching: "quick-create" matches "quick-create/"
+         - "skeleton" matches "skeleton-loader/" etc.
+         - If multiple matches, list them and ask the user to pick
+
+      2. If found, read the spec file (usually `{feature-name}-spec.md` or `spec.md`)
+
+      3. Validate completeness against the Feature Spec Template:
+         - Required sections: Overview, User Journeys, User Flow, Screen Layout,
+           Visual States, Components, Edge Cases, Data Flow, Analytics, References
+         - Flag any empty or missing sections
+
+      4. Extract a structured summary
+
+      ## Output Format
+
+      If found:
+      ```
+      SPEC_FOUND: [full path to spec file]
+      SPEC_COMPLETENESS: PASS | PARTIAL (missing: [section list])
+      SPEC_SUMMARY:
+        Feature: [name from Overview]
+        Requirements: [count of distinct behavioral requirements]
+        Visual States: [list of states from Visual States section]
+        Components: [count of components specified]
+        Analytics Events: [count from Analytics section]
+        Edge Cases: [count from Edge Cases table]
+        Platform Notes: [any platform-specific mentions, or "None — platform-agnostic"]
+      ```
+
+      If not found:
+      ```
+      SPEC_NOT_FOUND: No spec matching "{{feature}}" in pgf/feature/issues/specs/
+      AVAILABLE_SPECS: [list all folder names in pgf/feature/issues/specs/]
+      SUGGESTION: Run specter to reverse-engineer a spec, or create one manually.
+      ```
+
+      If found but incomplete:
+      ```
+      SPEC_FOUND: [path]
+      SPEC_COMPLETENESS: PARTIAL (missing: [sections])
+      SPEC_SUMMARY: [same as above]
+      WARNING: Spec is missing sections. Implementation may have gaps.
+      ```
+    auto_continue: true
