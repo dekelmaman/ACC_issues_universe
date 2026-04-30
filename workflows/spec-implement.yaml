@@ -1,0 +1,179 @@
+name: spec-implement
+description: "Plan tasks from ADR then implement with continuous spec drift checking"
+
+params:
+  spec_path:
+    description: "Path to the feature spec (source of truth)"
+    required: true
+  feature:
+    description: "Feature name for locating work artifacts"
+    required: true
+  platform:
+    description: "Single platform to implement (android, ios, or pgf). Run once per platform."
+    required: true
+  drift_frequency:
+    description: "Drift check cadence: 'every-task', 'every-3', 'per-phase'"
+    default: "every-3"
+  kb_path:
+    description: "Knowledge-base path for persistent storage"
+    required: false
+
+steps:
+  - id: plan-tasks
+    agent: neo
+    description: "Generate ordered task breakdown from the platform ADR"
+    prompt: |
+      Read:
+      - Feature spec: {{spec_path}}
+      - Platform ADR: .claude/specs/{{feature}}/adr-{{platform}}.md
+      - Research: .claude/specs/{{feature}}/research.md
+
+      ## Your Mission
+
+      Generate an implementation task list for {{platform}}.
+      Save to BOTH locations:
+      1. `.claude/specs/{{feature}}/tasks-{{platform}}.md` (working copy)
+      {{#if kb_path}}
+      2. `{{kb_path}}/tasks-{{platform}}.md` (persistent copy — knowledge base)
+      {{/if}}
+
+      ## Skill Loading
+
+      - **android**: Load mobius-mvi, jetpack-compose skills
+      - **ios**: Load tca/composable-architecture, swiftui/modern-patterns skills
+      - **pgf**: Load mobius-mvi skill (shared models only)
+
+      ## Task Format (MANDATORY)
+
+      Every task follows this structure:
+      ```markdown
+      - [ ] {phase}.{n} [TAG] {Task name}
+        - **Do**: {Exact steps, max 4}
+        - **Files**: {Exact file paths, max 3}
+        - **Done when**: {Declarative success criteria}
+        - **Verify**: {Shell command that proves it works}
+        - **Commit**: `{conventional commit message}`
+        - _Spec: {requirement IDs from ADR, e.g., SR-1, SR-3}_
+        - _ADR: {component plan reference}_
+      ```
+
+      Tags: [P] = parallelizable, [VERIFY] = quality checkpoint, [DRIFT-CHECK] = spec drift gate
+
+      ## Workflow Selection
+
+      Read research.md to determine:
+      - Is this a new feature (no existing code)? -> POC-first workflow
+      - Is this extending existing feature? -> TDD Red-Green-Yellow workflow
+
+      **POC-first phases**: Make It Work -> Refactoring -> Testing -> Quality Gates
+      **TDD phases**: Red-Green-Yellow Cycles -> Additional Testing -> Quality Gates
+
+      ## Drift Check Insertion
+
+      Drift frequency: {{drift_frequency}}
+
+      - `every-3`: Insert `[DRIFT-CHECK]` after every 3rd non-[VERIFY] task
+      - `every-task`: Insert `[DRIFT-CHECK]` after every task
+      - `per-phase`: Insert `[DRIFT-CHECK]` at phase boundaries only
+
+      Drift check task format:
+      ```markdown
+      - [ ] DC-{n} [DRIFT-CHECK] Spec compliance check
+        - **Scope**: Tasks since last check: [{task IDs}]
+        - **Spec**: {{spec_path}}
+        - **ADR**: .claude/specs/{{feature}}/adr-{{platform}}.md
+        - **Check**: Rev compares code changes against ADR requirement mapping
+      ```
+
+      ## Quality Checkpoints
+
+      Insert [VERIFY] quality gates every 2-3 tasks (ralph-specum pattern):
+      ```markdown
+      - [ ] V{n} [VERIFY] Quality checkpoint
+        - **Do**: Run quality commands from research.md
+        - **Verify**: {build cmd} && {test cmd} && {lint cmd}
+        - **Done when**: All commands exit 0
+        - **Commit**: `chore({{feature}}): pass quality checkpoint` (only if fixes needed)
+      ```
+
+      ## Task Sizing Rules
+
+      - Max 4 Do steps per task
+      - Max 3 files per task
+      - If exceeded, split into multiple tasks
+      - Each task should be completable in ~5-15 minutes
+
+      ## Spec Traceability
+
+      EVERY implementation task (not checkpoints) must trace to:
+      - At least one spec requirement ID (SR-N from the ADR requirement mapping)
+      - The ADR component plan entry it fulfills
+
+      If a task can't trace to a spec requirement, it shouldn't exist.
+    auto_continue: true
+
+  - id: implement
+    agent: trinity
+    collaborators: [sherlock, issues-reviewer]
+    description: "Execute tasks with drift detection loop"
+    prompt: |
+      Execute the task list at `.claude/specs/{{feature}}/tasks-{{platform}}.md`
+
+      ## Skill Loading
+
+      Load platform skills before writing any code:
+      - **android**: mobius-mvi, jetpack-compose, localization
+      - **ios**: tca-reducer, AlloyUI, tca/composable-architecture, swiftui/modern-patterns, localization
+      - **pgf**: mobius-mvi, localization
+
+      ## Execution Loop
+
+      For each task in order:
+
+      ### Regular Tasks
+      1. Read the task's Do steps, Files, and Done when criteria
+      2. If you need to understand existing code before modifying, delegate to Sherlock:
+         "What does [file] do at [lines]? What's the pattern I should follow?"
+      3. Implement the changes
+      4. Run the Verify command — must pass
+      5. Commit with the specified message
+      6. Mark task [x] in tasks file
+
+      ### [VERIFY] Tasks
+      1. Run the quality commands
+      2. If they fail: fix the issues, commit, re-run
+      3. Max 3 fix attempts — if still failing, STOP and report
+
+      ### [DRIFT-CHECK] Tasks
+      1. Record current git SHA
+      2. Delegate to **Issues Reviewer (Rev)** in spec-drift mode:
+
+         ```
+         Mode: spec-drift
+         Spec: {{spec_path}}
+         ADR: .claude/specs/{{feature}}/adr-{{platform}}.md
+         Diff range: {last_drift_sha}..HEAD
+         Tasks completed: {list of task IDs since last check}
+         ```
+
+      3. Parse Rev's verdict:
+         - **DRIFT_NONE**: Continue to next task
+         - **DRIFT_MINOR**: Log warning in .claude/specs/{{feature}}/drift-log.md
+           {{#if kb_path}}(also append to {{kb_path}}/drift-log.md){{/if}}, continue
+         - **DRIFT_MAJOR**:
+           a. Read Rev's correction tasks
+           b. Execute each FIX task (same as regular tasks)
+           c. Re-run drift check
+           d. If still DRIFT_MAJOR after 3 retries: STOP and escalate to user
+           e. If drift cleared: continue
+
+      4. **Adaptive frequency**: After any DRIFT_MAJOR, temporarily check every 1 task
+         for the next 3 tasks, then relax back to {{drift_frequency}}
+
+      ## Completion
+
+      When all tasks are marked [x]:
+      - Output: SPEC_IMPLEMENT_COMPLETE
+      - Include summary: tasks completed, drift checks run, corrections applied
+    depends_on: [plan-tasks]
+    auto_continue: false
