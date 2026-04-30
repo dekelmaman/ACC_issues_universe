@@ -1,0 +1,239 @@
+name: gap-finder
+description: >
+  Pre-implementation gap analysis using brainstorming principles — explores project
+  context, investigates existing code and docs, proposes implementation approaches
+  with trade-offs, and generates prioritized clarification questions covering purpose,
+  constraints, success criteria, scope, edge cases, and technical unknowns. Every
+  question is multiple-choice where possible, one concern per question, impact-prioritized,
+  with a default assumption so work is never blocked.
+
+params:
+  description:
+    description: "What you want to implement or change (free text)"
+    required: true
+  platform:
+    description: "Target platform: android, ios, kmp"
+    default: "android"
+
+steps:
+  - id: investigate
+    agent: sherlock
+    description: "Explore project context — code, docs, specs, recent commits, tests"
+    prompt: |
+      Task description: {{description}}
+      Platform: {{platform}}
+
+      Perform a thorough project context exploration
+      (brainstorming principle: "check files, docs, recent commits FIRST"):
+
+      1. **Existing code** — What code currently exists for this feature area?
+         - File paths, key classes/functions, patterns used
+         - Architecture: how is this area structured?
+
+      2. **Data flows** — How does data move through the system?
+         - API → Store → ViewModel → UI (trace the full path)
+
+      3. **Existing docs/specs** — Any specs, READMEs, or design docs related to this?
+         - Check `specs/`, `docs/`, any `.md` files in the feature area
+         - Scan for TODOs, TBDs, or incomplete sections in existing docs (placeholder scan)
+
+      4. **Recent changes** — What's been recently modified in this area?
+         - Recent commits touching relevant files (use git log)
+         - Any ongoing migrations or refactors?
+
+      5. **Existing tests** — What test coverage exists?
+         - Unit tests, integration tests, UI tests
+         - What IS tested vs what is NOT tested?
+
+      6. **Related features** — What adjacent features might be affected?
+         - Shared components, shared state, shared APIs
+
+      Focus on mapping what EXISTS thoroughly — the next agents identify what's MISSING.
+      Output with file paths and line numbers. Distinguish confirmed vs inferred vs uncertain.
+    auto_continue: true
+
+  - id: scope-and-approaches
+    agent: neo
+    collaborators: [sherlock]
+    description: "Scope check, 2-3 approaches with trade-offs, isolation analysis, full gap identification"
+    prompt: |
+      Task description: {{description}}
+      Platform: {{platform}}
+
+      Using Sherlock's investigation, perform a comprehensive architectural analysis.
+      Apply ALL brainstorming principles throughout.
+
+      ## Part 1: Scope Assessment
+      (Brainstorming: "assess scope — if multiple independent subsystems, flag immediately")
+
+      - Is this ONE feature or MULTIPLE independent pieces that should be separate?
+      - If multiple: list the sub-projects, how they relate, what order to build them
+      - Hidden complexity: what looks simple but isn't?
+      - Size estimate: small (hours), medium (days), large (week+)?
+      - Anti-pattern check: even if it LOOKS simple, treat it as worth full analysis
+
+      ## Part 2: Implementation Approaches
+      (Brainstorming: "ALWAYS propose 2-3 different approaches with trade-offs")
+
+      Propose 2-3 distinct implementation approaches:
+      - **Approach A:** [name] — description, pros, cons, when to pick this
+      - **Approach B:** [name] — description, pros, cons, when to pick this
+      - **Approach C (if applicable):** [name] — description, pros, cons
+      - **Your Recommendation:** which approach and WHY
+        (consider: effort, risk, maintainability, testability, pattern alignment)
+
+      ## Part 3: Design for Isolation
+      (Brainstorming: "break into smaller units — one clear purpose, well-defined interfaces,
+       understood and tested independently")
+
+      For the recommended approach:
+      - What are the independent units/components?
+      - Can each be understood without reading the others' internals?
+      - Can each be tested independently?
+      - What are the interfaces between them?
+      - Could someone change one unit's internals without breaking consumers?
+
+      ## Part 4: Gap Identification
+
+      ### 4a. Ambiguities
+      Requirements that could be interpreted two or more ways.
+      (Brainstorming: "could any requirement be interpreted two different ways? Pick one, make explicit")
+
+      ### 4b. Missing Requirements
+      Unspecified behaviors — cover ALL of these:
+      - Error states (network failure, validation errors, server errors)
+      - Edge cases (empty data, max limits, concurrent access)
+      - Empty states (first-use, no results, deleted content)
+      - Loading states (initial load, refresh, pagination)
+      - Offline behavior
+      - Permissions / access control
+      - Accessibility
+      - Analytics / tracking
+      - Localization
+
+      ### 4c. Technical Unknowns
+      Decisions that must be made: data source, state management, API contracts,
+      caching strategy, migration path from existing code
+
+      ### 4d. Assumption Risks
+      Things we're assuming but haven't confirmed with the requester
+
+      ### 4e. Dependency Gaps
+      Upstream/downstream systems, teams, APIs, or timing constraints
+
+      ### 4f. Internal Consistency Check
+      (Brainstorming: "do any sections contradict each other?")
+      Do different sources (description, existing code, docs, conventions) agree?
+      Flag every conflict explicitly.
+
+      ### 4g. Success Criteria Gaps
+      (Brainstorming: "understand success criteria")
+      How do we know this is DONE? What does "working" look like?
+      Is that defined? If not, this is a critical gap.
+
+      ### 4h. Placeholder / TBD Scan
+      (Brainstorming: "any TBD, TODO, incomplete sections, vague requirements?")
+      Did Sherlock find any TODOs, TBDs, or incomplete specs in existing docs?
+      Are there vague requirements in the task description itself?
+
+      For EACH gap: what's unclear, why it matters (what goes wrong if we guess),
+      and what information would resolve it.
+    depends_on: [investigate]
+    auto_continue: true
+
+  - id: synthesize
+    agent: ezra
+    description: "Compile all findings into prioritized GapFinder report with brainstorming-quality questions"
+    prompt: |
+      You have context from:
+      - Sherlock's project context exploration (code, docs, tests, recent changes, placeholders)
+      - Neo's scope assessment, 2-3 implementation approaches, isolation analysis, and full gap catalog
+
+      Synthesize everything into a structured GapFinder report.
+
+      ## Brainstorming Principles (ALL of these — no shortcuts)
+
+      1. **Multiple choice preferred** — Frame as "A, B, or C?" not open-ended wherever possible
+      2. **One concern per question** — NEVER bundle multiple unknowns into one question
+      3. **Prioritize by implementation impact** — Questions blocking the most work come first
+      4. **Surface conflicts explicitly** — Source A says X, source B says Y → make it a question
+      5. **YAGNI filter** — Cut questions that don't affect THIS implementation
+      6. **Purpose / constraints / success criteria** — Ensure these three are explicitly covered
+      7. **Scope-first** — If Neo flagged scope concerns, those questions come BEFORE everything else
+      8. **Default assumptions** — EVERY question gets "what we'd assume" so work is never blocked
+      9. **Anti-pattern: "too simple"** — Even trivial-looking features get the full treatment
+      10. **Incremental validation** — Group questions so critical ones can be answered first, work can start
+      11. **Approach selection** — Include Neo's 2-3 approaches as a question with trade-off summary
+      12. **Isolation check** — If any proposed unit can't be tested independently, flag it
+
+      ## Question Categories (at least one question per category IF gaps exist)
+
+      - **Purpose & Goals** — Are we solving the right problem? Is the goal clear and specific?
+      - **Success Criteria** — How do we know it's done? What does "working" look like exactly?
+      - **Scope & Boundaries** — What's in, what's out? Decomposition needed?
+      - **Implementation Approach** — Which of Neo's proposed approaches? Constraints on the choice?
+      - **User Experience** — Error states, empty states, loading, edge cases, accessibility, offline
+      - **Data & State** — Where does data come from? How is state managed? Cache? Persistence?
+      - **Dependencies & Integration** — External systems, teams, APIs, timing, blocking work
+      - **Testing & Validation** — How will we verify? What MUST have test coverage?
+      - **Conventions & Patterns** — Anything that deviates from existing codebase patterns?
+      - **Analytics & Observability** — What events to track? How to know it's working in prod?
+
+      ## Output Format
+
+      ```
+      # GapFinder Report: [feature/task name]
+
+      ## Context Summary
+      [3-5 sentences: what we're building, what we know, key investigation findings]
+
+      ## Scope Assessment
+      [One thing or multiple? Complexity estimate. Decomposition needed?
+       If yes: list sub-projects and recommended order]
+
+      ## Implementation Approaches
+      [Neo's 2-3 approaches, summarized with trade-offs]
+      [Recommendation highlighted — this becomes a question below]
+
+      ## Critical Gaps (Must answer before ANY implementation starts)
+
+      ### Q1: [Short question title]
+      **Category:** [Purpose/Scope/UX/Data/Architecture/Dependencies/Testing/Conventions/Analytics]
+      **Why it matters:** [What breaks or gets built wrong if we guess]
+      **Options:**
+      - A) [option — with brief implication]
+      - B) [option — with brief implication]
+      - C) [Something else — please specify]
+      **Default if no answer:** [What we'd assume and proceed with]
+
+      ### Q2: ...
+
+      ## Important Gaps (Should answer, but implementation could start with stated assumptions)
+
+      ### Q5: ...
+
+      ## Nice-to-Know (Won't block work, but would improve quality or reduce rework)
+
+      ### Q8: ...
+
+      ## Assumptions We're Making
+      [Numbered list — each with:]
+      1. [What we assume] — **Why:** [reasoning] — **Risk if wrong:** [what changes]
+
+      ## Conflicts Detected
+      [Any contradictions between sources: description vs code vs docs vs conventions]
+      [Each conflict framed as: "Source A says X, Source B says Y — which is correct?"]
+
+      ## Placeholder / TBD Items Found
+      [Anything incomplete in existing docs or specs that needs resolution]
+
+      ## Scope Check
+      [Final verdict: appropriately scoped? Hidden complexity discovered?
+       Recommendation: proceed as-is, decompose, or needs more context?]
+      ```
+
+      Quality bar: every question earns its place by blocking real work or preventing
+      real mistakes. But DO NOT cut questions to look concise — thoroughness is the
+      entire point of GapFinder. Miss nothing.
+    depends_on: [scope-and-approaches]
+    auto_continue: false

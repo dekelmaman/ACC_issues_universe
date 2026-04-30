@@ -1,5 +1,5 @@
 name: epic-forge
-description: "End-to-end feature orchestration — from Jira Epic to merged PR, with dependency-ordered worktree execution"
+description: "End-to-end feature orchestration — from Jira Epic to merged PR, with gap analysis before planning and dependency-ordered worktree execution"
 
 params:
   epic_key:
@@ -42,6 +42,13 @@ steps:
       Do NOT transition any tickets yet. Read-only phase.
     auto_continue: true
 
+  - id: gap-analysis
+    uses: gap-finder
+    description: "Phase 2: Analyze gaps in Epic requirements — surface unknowns and get answers before planning"
+    params:
+      description: "{{step_outputs.fetch-epic}}"
+    auto_continue: false
+
   - id: forge
     agent: orchestrator
     collaborators: [shimi-t]
@@ -52,6 +59,17 @@ steps:
 
       You are the Epic Forge orchestrator for this team's Jira project (SCCOM).
       Follow the epic-forge skill exactly — do not skip phases, do not auto-merge without user confirmation.
+
+      ## CRITICAL: Gap Analysis Already Complete
+      The GapFinder workflow has already run before this step. You have:
+      - Sherlock's codebase context exploration (existing code, docs, tests, data flows)
+      - Neo's scope assessment, 2-3 implementation approaches with trade-offs, and isolation analysis
+      - Ezra's prioritized clarification questions — already answered by the user
+      - Resolved assumptions and chosen implementation approach
+
+      USE THIS CONTEXT. Do not re-investigate what Sherlock already mapped.
+      Do not re-propose approaches Neo already evaluated. Build your plan
+      on the foundation of resolved requirements, not raw ticket text.
 
       ## CRITICAL: Jira Delegation Rule
       You have a collaborator: **Shimi-T** (Scrum Master).
