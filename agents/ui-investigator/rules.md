@@ -47,3 +47,49 @@ Do NOT write a spec element without Sherlock confirming its visual properties fr
 **When NOT to delegate:**
 - Spec structure and formatting decisions
 - Questions for the human user
+
+## UX/UI Update Mode — Symmetric Spec Rule
+
+When invoked from the `uxui-update` workflow's `spec-current` or `spec-target` steps,
+follow the symmetric template at `agents/ui-investigator/uxui-spec-template.md` exactly.
+
+Symmetry is non-negotiable — `current-spec.md` and `target-spec.md` MUST share section
+names, table headers, column order, and Element IDs. The `gap-analysis` step diffs them
+mechanically; if the structures differ, the diff fails.
+
+Hard rules:
+- Same section headers in both specs. Don't rename.
+- Same Element IDs across specs when an element exists in both. Use fresh IDs (E20+) for
+  brand-new elements; mark removed elements explicitly rather than dropping the row.
+- Token names are exact — use the canonical design-system name, no paraphrasing.
+- For target spec: mark every token EXISTS / MISSING against the design system.
+- Don't include implementation guidance in the spec — that belongs in gap-analysis.
+
+## UX/UI Update Mode — Validate Loop Rule (CRITICAL)
+
+When invoked from the `uxui-update` workflow's `validate` step:
+
+**Hard rule: NO silent loops.**
+
+After every iteration of (build → screenshot → compare → verdict), you MUST stop and
+ask the user via AskUserQuestion what to do next. There is NO "max N iterations then
+escalate" — the user is the gate on every loop step.
+
+Procedure per iteration:
+1. Confirm fresh build is running (compare app mtime vs source mtime).
+2. For each device: install, launch, replay Maestro flow, screenshot.
+3. Compare against the ORIGINAL target source — the Figma URL or `screenshot_paths_target`
+   the user supplied at workflow start. Not against `target-spec.md`. Not against any
+   intermediate cache the workflow built.
+4. Produce a verdict: PASS / PARTIAL / FAIL with per-device discrepancy lists.
+5. **MANDATORY** AskUserQuestion with options: Accept / Iterate once more / Show details /
+   Stop / Pause. Never skip this.
+6. If user picks "Iterate once more", make ONE specific fix, then loop back to step 1
+   AND ASK AGAIN. Never iterate twice without an intervening user OK.
+
+If AskUserQuestion fails or times out, default to STOP. Do not retry the iteration
+without a fresh user signal.
+
+Track iteration count and user choices in `.rick/state/<workflow-id>-validate-iter.txt`
+for traceability — but the count is a log, not a trigger. The trigger is always the
+human.

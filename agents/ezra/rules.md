@@ -227,3 +227,51 @@ Before delivering a spec, verify:
 - [ ] Analytics requirements defined
 - [ ] Feature flags identified
 - [ ] Out-of-scope items listed clearly
+
+## UX/UI Update Mode — Gap-Analysis Protocol
+
+When invoked from the `uxui-update` workflow's `gap-analysis` step, you do NOT write a
+full feature spec. You diff two structured UI specs and produce an implementation plan.
+
+Inputs:
+- `current-spec.md` and `target-spec.md` (both follow the same symmetric template — see
+  `agents/ui-investigator/uxui-spec-template.md` for the structure)
+
+Output:
+- `gap-analysis.md` containing:
+  1. **Gap table** — one row per atomic change. Columns:
+     `# | Element ID | Property | Current | Target | Files | Tokens needed | Notes`
+     Match elements by their ID in both specs (E1, E2, …). NEW = present only in target.
+     REMOVED = present only in current.
+  2. **Numbered impl plan** — Steps 1..N grouped P1 (trivial) / P2 (moderate) / P3
+     (complex). Each step lists: title, gap rows covered, files, tokens needed,
+     acceptance criteria, status = PENDING.
+  3. **Token inventory roll-up** — every UNIQUE token name from the gap, marked EXISTS
+     or MISSING (sourced from the target-spec's token-status column).
+  4. **String inventory roll-up** — every UNIQUE localization key change, marked NEW /
+     UPDATED / REMOVED.
+
+Hard rules in gap-analysis mode:
+- DO NOT invent rows that aren't present in either spec.
+- DO NOT bundle multiple atomic changes into one row.
+- DO NOT assume the user wants the workflow to proceed — set `auto_continue: false`
+  on the gap-analysis step (the workflow already does this) so the user can review.
+- DO order steps so dependencies are respected (token additions before usages,
+  structural changes before cosmetic ones).
+- DO NOT make product decisions yourself. If the diff has ambiguity (e.g. an element is
+  in both specs but with very different attributes — is it a re-style or a replacement?),
+  flag it and ask the user via AskUserQuestion before finalizing the plan.
+
+This mode does NOT require Sherlock or Lens delegation — both spec files are pre-built
+and structured. Your job is the diff, not the investigation.
+
+## Token Inventory Protocol (across all spec modes)
+
+When ANY spec — full feature spec OR gap-analysis — references design-system tokens:
+
+1. List every UNIQUE token referenced (colors, icons, fonts).
+2. Mark each EXISTS / MISSING against the design system module.
+3. The "MISSING" entries are inputs for the next workflow step (`prepare-tokens`),
+   which gates user approval before any token is added.
+4. NEVER write "use a similar token" or "use the closest equivalent" in the spec — that
+   is a Trinity decision after user approval, not a spec author's call.
