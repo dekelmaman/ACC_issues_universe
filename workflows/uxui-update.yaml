@@ -1,0 +1,441 @@
+name: uxui-update
+description: "Symmetric-spec UX/UI update for an existing feature. Spec the current state, spec the target state, diff them, implement step-by-step, validate against the user's original target source on every iteration."
+
+# DESIGN PHILOSOPHY
+# -----------------
+# 1. SYMMETRIC SPECS — current state and target state are both turned into the SAME structured UI spec
+#    format. The gap is then computed by diffing two specs (text vs text), not by comparing code to a
+#    screenshot. This makes the gap reviewable, cacheable, and re-derivable when one side changes.
+#
+# 2. ASK BEFORE ADDING — design system assets (colors / icons / fonts) are NEVER added silently. If a
+#    target token does not exist in the design system module, the workflow asks the user with options.
+#
+# 3. NO SILENT LOOPS — `validate` ALWAYS pauses on AskUserQuestion after every iteration. The user
+#    decides whether to accept, iterate once more, or stop. There is no "max N then escalate" — every
+#    loop step is explicitly user-gated.
+#
+# 4. ORIGINAL-TARGET COMPARISON — `validate` compares the running app to the SAME target source the
+#    user provided at workflow start (Figma URL or screenshot files). Not against the spec, not against
+#    intermediate artifacts.
+#
+# 5. PLATFORM-AGNOSTIC — the workflow does not assume iOS, Swift, AlloyUI, or any specific design
+#    system. It can run for any platform/design-system pair as long as the agents have the right skills.
+
+params:
+  figma_url:
+    description: "Figma design URL with node-id (e.g. https://figma.com/design/.../?node-id=1234-5678). Source-of-truth for the TARGET state. If Figma MCP is unavailable, screenshot_paths_target are used instead."
+    required: false
+  screenshot_paths_target:
+    description: "Comma-separated paths to local screenshots of the TARGET design. Used when Figma is unavailable or the user prefers screenshots. Example: '/tmp/target-iphone.png,/tmp/target-ipad.png'. At least one of figma_url or screenshot_paths_target MUST be provided."
+    required: false
+  screenshot_paths_current:
+    description: "Comma-separated paths to local screenshots of the CURRENT (live app) state. Optional — if absent, the workflow takes them automatically by running the app on the supplied simulator UDIDs."
+    required: false
+  feature_path:
+    description: "Path to the main view/feature file to update. Used as the entry point for code reading and as the primary edit target for `implement`."
+    required: true
+  ticket_key:
+    description: "Jira ticket key (e.g. SCCOM-12345). Optional — skips ticket steps if not provided."
+    required: false
+  spec_dir:
+    description: "Directory where the workflow writes its three specs (current, target, gap) and the running impl plan. Default: pgf/feature/<feature>/specs/uxui-update/"
+    required: false
+  device_udids:
+    description: "Comma-separated list of simulator UDIDs to validate on. STRONGLY recommend at least one compact-class device (iPhone) AND one regular-class device (iPad). If empty, the workflow auto-discovers booted simulators."
+    required: false
+  project_name:
+    description: "Project / file name to open in the app for navigation (e.g. 'My Project'). The workflow asks if not provided."
+    required: false
+  navigation_flow_path:
+    description: "Path to a saved Maestro YAML that navigates from the app launch to the screen under test. If absent, the agent records one on first run and saves it. Default: .rick/state/<workflow-id>-navigation.yaml"
+    required: false
+  navigation_steps:
+    description: "Plain-text instructions for first-run navigation discovery (e.g. 'Open <project_name>, tap Settings, tap Quick Create'). Used only when no saved flow exists."
+    required: false
+  platform:
+    description: "Target platform: ios | android"
+    default: "ios"
+
+steps:
+  # =======================================================================================
+  # PHASE 1 — SYMMETRIC SPECS
+  # =======================================================================================
+
+  - id: fetch-ticket
+    agent: shimi-t
+    description: "Fetch the Jira ticket so its description and acceptance criteria inform later steps"
+    skip_if: "{{#unless ticket_key}}true{{/unless}}"
+    prompt: |
+      Fetch Jira ticket {{ticket_key}} and return a structured summary:
+      - Summary, description, acceptance criteria
+      - Status, assignee
+      - Any linked design specs or attached Figma URLs
+      - Comments that mention design or implementation decisions
+
+      READ-ONLY. Do not transition the ticket.
+    auto_continue: true
+
+  - id: spec-current
+    agent: ui-investigator
+    description: "Translate the CURRENT running app + code into a structured UI spec"
+    prompt: |
+      Produce a structured UI spec describing the CURRENT state of the feature.
+
+      Feature code entry point: {{feature_path}}
+      {{#if screenshot_paths_current}}Pre-supplied current screenshots: {{screenshot_paths_current}}{{/if}}
+      {{#if device_udids}}Devices for capture: {{device_udids}}{{/if}}
+      Spec output path: {{spec_dir}}/current-spec.md (default if spec_dir empty: pgf/feature/issues/specs/uxui-update/current-spec.md)
+
+      Follow the symmetric UI-spec template (see your `uxui-spec-template.md` extra file).
+      The structure is identical to the one used for the target spec — that is what makes a
+      mechanical diff possible later.
+
+      Procedure:
+
+      1. **Acquire current screenshots.** Source priority:
+         a. If `screenshot_paths_current` is set, read those files directly.
+         b. Otherwise, build/install/launch the app on each device in `device_udids`,
+            navigate to the feature using the saved Maestro flow at `navigation_flow_path`
+            (or record one using `navigation_steps`), and capture screenshots to
+            `/tmp/current-<form-factor>.png`. Save the Maestro flow if you record it.
+         c. If neither path works, STOP and ask the user via AskUserQuestion to drop
+            current-state screenshots locally and provide their paths.
+
+      2. **Read the current source code** at `{{feature_path}}`. Trace into related files
+         only as needed to ground spec claims (delegate to Sherlock for cross-file work).
+
+      3. **Author `current-spec.md`** following the symmetric template:
+         - Layout (top-to-bottom sections)
+         - Elements table (type, text, tokens, size, position, conditions)
+         - Tokens referenced (colors, icons, fonts) — list every token name actually used
+         - Strings referenced (key + current value)
+         - States (compact / regular / loading / empty / error)
+         - "Source" header line: list both the screenshots AND the code file used
+
+      4. Confirm acceptance criteria from the ticket (if any) are reflected in the spec.
+
+      Output: write `current-spec.md` to disk. Report a summary of section counts.
+    depends_on: [fetch-ticket]
+    auto_continue: true
+
+  - id: spec-target
+    agent: ui-investigator
+    description: "Translate the TARGET design (Figma OR screenshots) into a structured UI spec — same template as current-spec"
+    prompt: |
+      Produce a structured UI spec describing the TARGET (desired) state.
+
+      {{#if figma_url}}Figma design: {{figma_url}}{{/if}}
+      {{#if screenshot_paths_target}}Target screenshots: {{screenshot_paths_target}}{{/if}}
+      Spec output path: {{spec_dir}}/target-spec.md
+
+      Use the SAME symmetric template (`uxui-spec-template.md`) as current-spec. This is
+      non-negotiable — symmetric specs are what make the gap a clean diff.
+
+      Procedure:
+
+      1. **Resolve the target source.** Priority:
+         a. If `screenshot_paths_target` is set, read those files directly. Skip Figma.
+         b. Else if `figma_url` is set, attempt Figma MCP (`get_design_context`,
+            `get_screenshot`, `get_metadata`). On any error/rate-limit, fall back to (c).
+            CACHE all Figma assets to `/tmp/figma-cache/<node-id>.<ext>`.
+         c. Ask the user via AskUserQuestion to drop target screenshots locally OR paste a
+            different Figma URL. Use their answer; cache results.
+         d. If all three fail, STOP and report the blocker.
+
+      2. **Author `target-spec.md`** with the SAME structure as `current-spec.md`:
+         - Same Layout sections
+         - Same Elements table headers (type, text, tokens, size, position, conditions)
+         - Same Tokens-referenced and Strings-referenced sections
+         - Same States section
+         - "Source" line listing the resolved target source
+
+      3. **Mark every token as EXISTS or MISSING** against the design system module
+         (e.g. AlloyUI on iOS, equivalent on Android). Do not add anything yet —
+         `prepare-tokens` handles that. Just inventory.
+
+      Output: write `target-spec.md` to disk. Report token-inventory summary
+      (X tokens referenced, Y exist, Z missing).
+    depends_on: [spec-current]
+    auto_continue: true
+
+  - id: gap-analysis
+    agent: ezra
+    description: "Diff the two specs into a numbered, dependency-ordered implementation plan"
+    prompt: |
+      Diff `current-spec.md` and `target-spec.md` to produce the gap = numbered impl plan.
+
+      Inputs:
+      - {{spec_dir}}/current-spec.md (from spec-current)
+      - {{spec_dir}}/target-spec.md  (from spec-target)
+      Output: {{spec_dir}}/gap-analysis.md (the implementation plan)
+
+      Procedure:
+
+      1. **Parse both specs** section by section.
+      2. **Build the gap table** — one row per discrete change:
+         | # | Element | Property | Current | Target | Files | Tokens needed | Notes |
+         A "row" is one atomic change (color swap, label rename, layout move, component
+         add, component remove). DO NOT bundle multiple changes per row.
+
+      3. **Order the rows** so dependencies are respected:
+         - Token additions before usages
+         - Layout/structural changes before cosmetic ones
+         - Trivial leaf-level changes last
+         Group as: [P1 trivial] / [P2 moderate] / [P3 complex/structural]
+
+      4. **Produce the impl plan**:
+         - Numbered Steps (1..N) with title + acceptance criteria each
+         - For each step: which gap rows it covers, files touched, tokens needed
+         - Mark all steps as `PENDING` initially
+
+      5. **Token inventory roll-up** — list every UNIQUE token name from the gap rows,
+         marked EXISTS / MISSING. This feeds the next step (`prepare-tokens`).
+
+      6. **String inventory roll-up** — list every UNIQUE localization key change
+         (NEW / UPDATED / REMOVED). This feeds `localization-sweep`.
+
+      Stop after writing the file. The user reviews the gap before implementation begins
+      (the next step does NOT auto-continue).
+    depends_on: [spec-target]
+    auto_continue: false
+
+  # =======================================================================================
+  # PHASE 2 — IMPLEMENT
+  # =======================================================================================
+
+  - id: prepare-tokens
+    agent: trinity
+    description: "Search the design system for every required token; ASK USER before adding any missing one"
+    prompt: |
+      Resolve all design-system tokens needed by the gap before any code is written.
+
+      Input: token inventory from `gap-analysis.md`
+      Reference protocol: see your `design-system-asset-protocol.md` extra file
+
+      For each token marked MISSING in the gap:
+
+      1. **Search-first** — exhaustively grep the design system module for the token name,
+         alternate spellings, and adjacent values (e.g. if `purple-800` is missing, check
+         purple-700, purple-900, and search assets for any "Purple-800.*" file). Report
+         what you found.
+
+      2. **Ask the user** via AskUserQuestion with these options:
+         - Add the new token — user provides hex / asset value (or you propose one)
+         - Use an existing close alternative — you propose which (e.g. purple-700)
+         - Skip this token — mark the gap row as DEFERRED
+         - Abort — workflow stops
+
+      3. **If user picks "Add"**, follow the design-system-asset-protocol exactly to make
+         the multi-file change (color = enum + token + colorset; icon = asset + registry;
+         font = registry + asset). Verify the change builds before continuing.
+
+      4. **Update gap-analysis.md** — mark each token as RESOLVED (existing / added / replaced / deferred).
+
+      NEVER add a token without explicit user approval. Even if you're sure of the value.
+      The cost of asking is one prompt; the cost of a wrong token in the design system is
+      a future cleanup PR.
+    depends_on: [gap-analysis]
+    auto_continue: false
+
+  - id: start-ticket
+    agent: shimi-t
+    description: "Move Jira ticket to In Progress"
+    skip_if: "{{#unless ticket_key}}true{{/unless}}"
+    prompt: |
+      Transition ticket {{ticket_key}} to In Progress and post a brief comment:
+      "Gap analysis approved, tokens resolved. Implementation starting on {{platform}}."
+
+      Standard transition protocol — fetch status, get transitions, transition, comment.
+    depends_on: [prepare-tokens]
+    auto_continue: true
+
+  - id: implement
+    agent: trinity
+    description: "Implement the next PENDING step from the impl plan — one step at a time, with sibling-view consistency sweep"
+    prompt: |
+      Implement the FIRST step marked PENDING in `gap-analysis.md`.
+
+      Inputs:
+      - {{spec_dir}}/gap-analysis.md (impl plan)
+      - {{spec_dir}}/target-spec.md  (for any clarification)
+      - {{feature_path}} (primary edit target)
+
+      Procedure:
+
+      1. **Read the step** — title, files, tokens, acceptance criteria.
+
+      2. **Verify all tokens needed are RESOLVED** in the inventory. If any are still
+         MISSING (someone skipped prepare-tokens or new tokens emerged), STOP and ask the
+         user. DO NOT pick fallback tokens silently.
+
+      3. **Read the source files** before editing. Match existing style.
+
+      4. **Apply the changes** for THIS step only. Never combine multiple steps. Never
+         "improve" code outside the step's scope.
+
+      5. **Sibling-view consistency sweep** — after editing the primary file, search the
+         feature folder (parent directory of {{feature_path}} and 1-2 sibling folders) for
+         OTHER views that:
+            - Reference the same color/style tokens that just changed
+            - Render the same kind of element (e.g. CTA button, primary action, microphone)
+            - Should logically match the new visual treatment
+         For each match, REPORT it to the user via AskUserQuestion: "Found N sibling views
+         that may need matching updates. Apply same change to: [list]?" Default = no
+         changes; user opts in per file.
+
+      6. **Update the impl plan** — mark this step DONE, note which sibling files were
+         co-changed (and which were skipped).
+
+      7. **Report**: files touched, what changed per file, acceptance criteria checked.
+    depends_on: [start-ticket]
+    auto_continue: true
+
+  - id: localization-sweep
+    agent: trinity
+    description: "Inventory localization key changes — ASK USER about other locales"
+    prompt: |
+      Reconcile localization key changes across all locales.
+
+      Input: string inventory from `gap-analysis.md` + git diff of localization files
+      since the workflow started.
+
+      Procedure:
+
+      1. **Diff** the localization file(s) for the current locale (e.g. en.lproj).
+         Categorize every change:
+         - NEW key — added during implement
+         - UPDATED key — value changed
+         - REMOVED key — deleted
+
+      2. **List all locale files** the project ships (e.g. `find . -name "*.lproj"`).
+
+      3. **For each non-base locale**, AskUserQuestion: "Locale `<code>` has K keys
+         affected. How to handle?":
+            - Auto-propagate — copy the EN value as a placeholder, add a TODO marker
+            - Leave for translation pipeline — workflow does nothing; translators handle it
+            - Skip this locale — leave as-is
+
+      4. **Apply chosen action** per locale. Never silently propagate.
+
+      5. **Report** per locale: keys touched, action taken.
+    depends_on: [implement]
+    auto_continue: true
+
+  - id: validate
+    agent: ui-investigator
+    description: "Run the app, screenshot, compare to the ORIGINAL TARGET SOURCE, ASK USER every iteration"
+    prompt: |
+      Validate the implementation against the ORIGINAL target source (Figma URL or
+      screenshot paths the user provided at workflow start).
+
+      Inputs:
+      - Original target: {{#if figma_url}}{{figma_url}}{{else}}{{screenshot_paths_target}}{{/if}}
+      - Devices: {{device_udids}}
+      - Saved Maestro flow: {{navigation_flow_path}}
+      - Target spec for reference: {{spec_dir}}/target-spec.md
+
+      ## Hard rule: NO silent loops
+      After EVERY iteration of compare-and-report, you MUST stop and ask the user via
+      AskUserQuestion what to do next. NEVER auto-iterate without user input. If the
+      AskUserQuestion times out or fails, default to STOP — do not retry without a new
+      user signal.
+
+      ## Iteration procedure (one pass = one user prompt at the end)
+
+      1. **Confirm fresh build is running.**
+         - Check `~/Library/Developer/Xcode/DerivedData` for the latest .app
+         - If app is older than {{feature_path}}, STOP and tell the user to rebuild
+           (xcodebuild from CLI may be broken — see your Memory.md). Do NOT proceed.
+
+      2. **For each device in `device_udids`:**
+         a. Install + launch the app
+         b. Replay the saved Maestro flow (or record one if missing)
+         c. Capture a screenshot to `/tmp/validate-<form-factor>-iter<N>.png`
+
+      3. **Compare against the ORIGINAL TARGET** — not against target-spec.md, not
+         against any intermediate artifact:
+         - If `figma_url` is set: compare to `/tmp/figma-cache/<node-id>.<ext>`
+           (cached during spec-target). If the cache is missing, attempt one Figma MCP
+           call to re-cache; if that fails, fall back to screenshot_paths_target.
+         - If `screenshot_paths_target` is set: compare to those files directly.
+         - For each device, produce a comparison table:
+           | Aspect | Target (original source) | Live app | Match? |
+
+      4. **Combined verdict for this iteration:**
+         - PASS — all critical elements match on every device
+         - PARTIAL — minor discrepancies (list them per device)
+         - FAIL — major mismatches (list them with proposed fixes)
+
+      5. **MANDATORY user prompt** — use AskUserQuestion with these options:
+         - **Accept** — verdict is good enough, move on to audit
+         - **Iterate once more** — let me try one more fix attempt; describe the fix you'd make
+         - **Show details** — render the comparison side by side and pause for me to inspect
+         - **Stop** — mark unresolved aspects as DEFERRED in gap-analysis and move on
+         - **Pause** — hand control back to the user; they'll resume later
+
+      6. **Track iterations** — keep a counter at `.rick/state/<workflow-id>-validate-iter.txt`.
+         Log every user choice + the verdict. This is for traceability, NOT for an auto-escalate
+         after N iterations — the user is always the gate.
+
+      7. **If user picks "Iterate once more":**
+         - Make ONE specific, targeted fix to address the highest-priority FAIL
+         - Rebuild, re-screenshot, re-compare, ASK USER AGAIN
+         - Never iterate twice without an intervening user OK
+    depends_on: [localization-sweep]
+    auto_continue: false
+
+  # =======================================================================================
+  # PHASE 3 — SHIP-READY
+  # =======================================================================================
+
+  - id: audit
+    agent: alloy-auditor
+    description: "Design system compliance + cross-feature visual consistency"
+    prompt: |
+      Audit the implementation for design system compliance AND cross-feature
+      consistency.
+
+      Primary file: {{feature_path}}
+      Plus any sibling files touched during `implement` (read git diff to find them).
+
+      Compliance pass:
+      - Native primitives where design-system equivalents exist → flag with fix
+      - Hardcoded colors / fonts / spacing → flag with token suggestion
+      - Wrong semantic tokens (e.g. interactive-blue used for AI-purple action)
+
+      Missing-token pass (NEW):
+      - For any flag whose fix would require a token NOT in the design system,
+        mark it `NEEDS_NEW_TOKEN — ASK USER` instead of suggesting an arbitrary fix.
+
+      Cross-feature consistency pass (NEW):
+      - Walk sibling files in the feature folder
+      - Find any view that renders the same KIND of element with different tokens
+        than the audited file (e.g. another CTA still using the old blue)
+      - Report each as a consistency gap, with the file + line and the recommended fix
+
+      Report format: PASS / FAIL with severity (🔴 violation, 🟡 warning, ⚪ consistency
+      gap), and proposed fixes.
+    depends_on: [validate]
+    auto_continue: true
+
+  - id: review
+    agent: issues-reviewer
+    description: "Pre-PR code review — local only, no PR creation, no push"
+    prompt: |
+      Pre-PR review of all changes since the workflow started. The user opens the PR
+      themselves with everything bundled.
+
+      1. `git diff` against the workflow's start point — review all touched files
+         (primary feature, design-system additions, sibling files, localization).
+      2. Check:
+         - Architecture/state-management patterns appropriate to platform (TCA on iOS,
+           Mobius on Android, etc.)
+         - View composition (no unnecessary state, no over-extracted helpers)
+         - Design system usage correctness
+         - No regressions to unrelated code
+         - No dead/commented code
+         - No leftover debug logging
+      3. Output: APPROVE or REQUEST CHANGES with file + line citations.
+      4. Do NOT push, commit, or create a PR.
+    depends_on: [audit]
+    auto_continue: false

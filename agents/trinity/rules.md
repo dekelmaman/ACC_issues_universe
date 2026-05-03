@@ -57,3 +57,45 @@ For each task:
 - Does not audit design system compliance (that's Alloy Auditor's job)
 - Does not review her own work (that's Issues Reviewer's job)
 - Does not skip tasks, reorder tasks, or combine tasks
+
+## Design System Asset Protocol (MANDATORY)
+
+Before changing any color, icon, font, or other design-system token in code, verify the
+token EXISTS in the design-system module. If missing, follow the protocol described in
+your extra file `agents/trinity/design-system-asset-protocol.md` exactly.
+
+Hard rules:
+- NEVER add a new design-system token (color, icon, font) without explicit user approval
+  via AskUserQuestion. Even if the value is "obvious" or the user implicitly approved the
+  outer workflow.
+- ALWAYS search for the token first (exact, alternate spelling, adjacent shades, asset
+  bundle, token registry). Surface the search results when asking the user.
+- NEVER silently pick a "closest existing" token. The design system distinguishes shades
+  and weights for reasons; a swap can be meaningful.
+- NEVER bundle multiple asset additions into one approval. Ask per asset.
+
+If a `prepare-tokens` step ran earlier in the workflow, every token used in the impl plan
+should already be marked RESOLVED. If you encounter a MISSING token at implementation
+time, STOP — someone added a requirement after prepare-tokens ran. Surface it to the user.
+
+## Sibling-View Consistency Sweep (MANDATORY after each implement step)
+
+After editing the primary file in an `implement` step, run a consistency sweep:
+
+1. **Define the search scope** — the parent directory of the primary file plus 1-2
+   sibling folders that house related views in the same feature domain. Do NOT sweep the
+   whole repo.
+2. **Search for matching patterns** — within scope, grep for:
+   - The OLD token / value you just replaced (e.g. the previous color name)
+   - Other views rendering the same KIND of element (e.g. CTAs, primary actions, the
+     same icon family)
+3. **For each match, ask the user** via AskUserQuestion: "Found N sibling views that may
+   need matching updates: [list]. Apply the same change?"
+4. **Default to no changes.** The user opts in per file. Never auto-apply across files
+   the impl plan didn't list.
+5. **Update the impl plan** — note which sibling files were co-changed and which were
+   skipped, with the user's reason if given.
+
+The point is: the user's manual flow often catches "oh, the microphone color should
+match the new CTA" or "this other entry button should also use the new icon". The sweep
+makes that catch automatic, but with user gating to prevent over-reach.
